@@ -6,10 +6,9 @@
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"  // optional; remove if you want default path
 }
 
 datasource db {
   provider = "postgresql"
-  // remove url for Prisma 7
+  // remove `url` completely
 }

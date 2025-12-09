@@ -1,126 +1,184 @@
 const express = require('express');
 const router = express.Router();
+const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const LeaveBalance = require('../models/LeaveBalance');
-const { authMiddleware } = require('../middleware/auth');
+
+// Register
+router.post('/register', async (req, res) => {
+    try {
+        const { employeeId, name, email, password, role, department } = req.body;
+        
+        // Check if user already exists
+        const existingUser = await User.findOne({ $or: [{ email }, { employeeId }] });
+        if (existingUser) {
+            return res.status(400).json({ error: 'User already exists' });
+        }
+        
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        // Create user
+        const user = new User({
+            employeeId,
+            name,
+            email,
+            password: hashedPassword,
+            role: role || 'employee',
+            department
+        });
+        
+        await user.save();
+        
+        // Create token
+        const token = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.JWT_SECRET || 'your-secret-key',
+            { expiresIn: '7d' }
+        );
+        
+        res.status(201).json({
+            token,
+            user: {
+                id: user._id,
+                employeeId: user.employeeId,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                department: user.department,
+                remainingLeaveDays: user.remainingLeaveDays
+            }
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({ error: 'Registration failed' });
+    }
+});
 
 // Login
 router.post('/login', async (req, res) => {
-  try {
-    const { email, password } = req.body;
-
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Please provide email and password' });
+    try {
+        const { email, password } = req.body;
+        
+        // Find user
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ error: 'Invalid credentials' });
+        }
+        
+        // Check password
+        const isValidPassword = await bcrypt.compare(password, user.password);
+        if (!isValidPassword) {
+            return res.status(400).json({ error: 'Invalid credentials' });
+        }
+        
+        // Create token
+        const token = jwt.sign(
+            { userId: user._id, role: user.role },
+            process.env.JWT_SECRET || 'your-secret-key',
+            { expiresIn: '7d' }
+        );
+        
+        res.json({
+            token,
+            user: {
+                id: user._id,
+                employeeId: user.employeeId,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                department: user.department,
+                remainingLeaveDays: user.remainingLeaveDays
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Login failed' });
     }
-
-    const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    res.json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ message: 'Server error' });
-  }
 });
 
 // Get current user
-router.get('/me', authMiddleware, async (req, res) => {
-  try {
-    res.json({
-      id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      role: req.user.role
-    });
-  } catch (error) {
-    res.status(500).json({ message: 'Server error' });
-  }
+router.get('/me', async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (!token) {
+            return res.status(401).json({ error: 'No token provided' });
+        }
+        
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+        
+        // Find user
+        const user = await User.findById(decoded.userId).select('-password');
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+        
+        res.json(user);
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(401).json({ error: 'Invalid token' });
+    }
 });
 
-// Seed initial users (for testing)
-router.post('/seed', async (req, res) => {
-  try {
-    await User.deleteMany({});
-    await LeaveBalance.deleteMany({});
-
-    const manager = await User.create({
-      name: 'John Manager',
-      email: 'manager@company.com',
-      password: 'manager123',
-      role: 'manager'
-    });
-
-    await LeaveBalance.create({
-      userId: manager._id,
-      casualLeaves: 12,
-      sickLeaves: 12,
-      earnedLeaves: 15
-    });
-
-    const employee1 = await User.create({
-      name: 'Alice Employee',
-      email: 'alice@company.com',
-      password: 'employee123',
-      role: 'employee',
-      managerId: manager._id
-    });
-
-    const employee2 = await User.create({
-      name: 'Bob Employee',
-      email: 'bob@company.com',
-      password: 'employee123',
-      role: 'employee',
-      managerId: manager._id
-    });
-
-    await LeaveBalance.create({
-      userId: employee1._id,
-      casualLeaves: 12,
-      sickLeaves: 12,
-      earnedLeaves: 15
-    });
-
-    await LeaveBalance.create({
-      userId: employee2._id,
-      casualLeaves: 12,
-      sickLeaves: 12,
-      earnedLeaves: 15
-    });
-
-    res.json({ 
-      message: 'Database seeded successfully',
-      users: {
-        manager: { email: 'manager@company.com', password: 'manager123' },
-        employee1: { email: 'alice@company.com', password: 'employee123' },
-        employee2: { email: 'bob@company.com', password: 'employee123' }
-      }
-    });
-  } catch (error) {
-    console.error('Seed error:', error);
-    res.status(500).json({ message: 'Error seeding database' });
-  }
+// Seed demo users (optional endpoint)
+router.post('/seed-demo', async (req, res) => {
+    try {
+        // Create demo departments first
+        const Department = require('../models/Department');
+        
+        const demoUsers = [
+            {
+                employeeId: 'EMP001',
+                name: 'John Doe',
+                email: 'emp@example.com',
+                password: 'password',
+                role: 'employee',
+                department: null
+            },
+            {
+                employeeId: 'MGR001',
+                name: 'Jane Smith',
+                email: 'manager@example.com',
+                password: 'password',
+                role: 'manager',
+                department: null
+            },
+            {
+                employeeId: 'ADM001',
+                name: 'Admin User',
+                email: 'admin@example.com',
+                password: 'password',
+                role: 'admin',
+                department: null
+            }
+        ];
+        
+        const createdUsers = [];
+        
+        for (const userData of demoUsers) {
+            // Check if user exists
+            const existingUser = await User.findOne({ email: userData.email });
+            
+            if (!existingUser) {
+                const hashedPassword = await bcrypt.hash(userData.password, 10);
+                const user = new User({
+                    ...userData,
+                    password: hashedPassword
+                });
+                await user.save();
+                createdUsers.push(user);
+            }
+        }
+        
+        res.json({
+            message: 'Demo users created',
+            users: createdUsers
+        });
+    } catch (error) {
+        console.error('Seed error:', error);
+        res.status(500).json({ error: 'Failed to seed demo users' });
+    }
 });
 
 module.exports = router;

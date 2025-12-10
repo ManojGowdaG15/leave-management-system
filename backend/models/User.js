@@ -6,7 +6,11 @@ const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   password: { type: String, required: true },
   role: { type: String, enum: ["employee", "manager", "admin"], default: "employee" },
-  department: { type: String, required: true, default: "Engineering" },
+  department: { 
+    type: String, 
+    required: true,
+    enum: ["Engineering", "Product", "Design", "Marketing", "Sales", "Human Resources", "Finance", "Operations", "Customer Support", "Legal", "Executive"]
+  },
   avatar: { type: String, default: "" },
   leaveBalance: {
     casual: { type: Number, default: 12 },
@@ -26,5 +30,4 @@ userSchema.methods.comparePassword = async function(password) {
 };
 
 const User = mongoose.model("User", userSchema);
-
-export default User;  // ← THIS MUST BE HERE
+export default User; // CORRECT DEFAULT EXPORT

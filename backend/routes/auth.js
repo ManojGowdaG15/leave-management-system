@@ -1,7 +1,6 @@
 import express from "express";
 import User from "../models/User.js";
 import jwt from "jsonwebtoken";
-import { protect } from "../middleware/auth.js";  // We'll create middleware next
 
 const router = express.Router();
 
@@ -15,13 +14,7 @@ router.post("/signup", async (req, res) => {
     const userExists = await User.findOne({ email });
     if (userExists) return res.status(400).json({ message: "Email already registered" });
 
-    const user = await User.create({
-      name,
-      email,
-      password,
-      role,
-      department
-    });
+    const user = await User.create({ name, email, password, role, department });
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
 
@@ -40,31 +33,26 @@ router.post("/signup", async (req, res) => {
   }
 });
 
-// Login
+// Login - NOW RETURNS DEPARTMENT
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
     const user = await User.findOne({ email }).select("+password");
     if (user && await user.comparePassword(password)) {
       const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
-      res.json({ token, user: { id: user._id, name: user.name, email, role: user.role } });
+      res.json({
+        token,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department  // ← NOW INCLUDED
+        }
+      });
     } else {
       res.status(401).json({ message: "Invalid credentials" });
     }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Reset Password
-router.post("/reset-password", async (req, res) => {
-  const { email, newPassword } = req.body;
-  try {
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: "User not found" });
-    user.password = newPassword;
-    await user.save();
-    res.json({ message: "Password reset successful" });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

@@ -16,7 +16,7 @@ router.post("/", protect, async (req, res) => {
   }
 });
 
-// Get My Leaves
+// Get My Leaves (Employee)
 router.get("/my", protect, async (req, res) => {
   try {
     const leaves = await Leave.find({ user: req.user._id }).populate("user", "name");
@@ -36,7 +36,7 @@ router.get("/", protect, authorize("manager", "admin"), async (req, res) => {
   }
 });
 
-// Approve/Reject
+// Approve/Reject Leave
 router.put("/:id", protect, authorize("manager", "admin"), async (req, res) => {
   const { status } = req.body;
   try {

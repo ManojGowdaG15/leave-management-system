@@ -1,3 +1,4 @@
+// frontend/src/pages/ManagerDashboard.jsx
 import { useState, useEffect } from "react";
 import axios from "axios";
 import FullCalendar from '@fullcalendar/react';

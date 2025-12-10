@@ -1,61 +1,123 @@
-import express from "express";
-import User from "../models/User.js";
-import jwt from "jsonwebtoken";
-
+const express = require('express');
 const router = express.Router();
+const User = require('../models/User');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 
-// Signup
-router.post("/signup", async (req, res) => {
-  const { name, email, password, role = "employee", department } = req.body;
+// @route   POST /api/auth/login
+// @desc    Authenticate user & get token
+// @access  Public
+router.post('/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
 
-  try {
-    if (!department) return res.status(400).json({ message: "Department is required" });
-
-    const userExists = await User.findOne({ email });
-    if (userExists) return res.status(400).json({ message: "Email already registered" });
-
-    const user = await User.create({ name, email, password, role, department });
-
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
-
-    res.status(201).json({
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        department: user.department
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-});
-
-// Login - NOW RETURNS DEPARTMENT
-router.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await User.findOne({ email }).select("+password");
-    if (user && await user.comparePassword(password)) {
-      const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: "30d" });
-      res.json({
-        token,
-        user: {
-          id: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          department: user.department  // ← NOW INCLUDED
+        // Validate input
+        if (!email || !password) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Please provide email and password' 
+            });
         }
-      });
-    } else {
-      res.status(401).json({ message: "Invalid credentials" });
+
+        // Find user
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(401).json({ 
+                success: false,
+                error: 'Invalid credentials' 
+            });
+        }
+
+        // Check password
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(401).json({ 
+                success: false,
+                error: 'Invalid credentials' 
+            });
+        }
+
+        // Create JWT token
+        const token = jwt.sign(
+            { 
+                id: user._id, 
+                email: user.email, 
+                role: user.role, 
+                name: user.name 
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Send response
+        res.json({
+            success: true,
+            token,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                department: user.department,
+                leave_balance: user.leave_balance
+            }
+        });
+
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Server error' 
+        });
     }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
 });
 
-export default router;
+// @route   GET /api/auth/me
+// @desc    Get current logged in user
+// @access  Private
+router.get('/me', async (req, res) => {
+    try {
+        // Get token from header
+        const token = req.header('Authorization')?.replace('Bearer ', '');
+        
+        if (!token) {
+            return res.status(401).json({ 
+                success: false,
+                error: 'No token, authorization denied' 
+            });
+        }
+
+        // Verify token
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        
+        // Find user
+        const user = await User.findById(decoded.id).select('-password');
+        
+        if (!user) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'User not found' 
+            });
+        }
+        
+        res.json({
+            success: true,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+                department: user.department,
+                leave_balance: user.leave_balance
+            }
+        });
+    } catch (error) {
+        console.error('Get user error:', error);
+        res.status(500).json({ 
+            success: false,
+            error: 'Server error' 
+        });
+    }
+});
+
+module.exports = router;

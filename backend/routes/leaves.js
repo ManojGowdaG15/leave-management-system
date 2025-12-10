@@ -34,24 +34,50 @@ router.get("/", protect, authorize("manager", "admin"), async (req, res) => {
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
+}); 
+
+//employee to cancel leave
+router.put("/:id/cancel", protect, async (req, res) => {
+  try {
+    const leave = await Leave.findById(req.params.id);
+    if (leave.user.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: "Not authorized" });
+    }
+    if (leave.status !== "pending") {
+      return res.status(400).json({ message: "Can only cancel pending leaves" });
+    }
+    leave.status = "Cancelled";
+    await leave.save();
+    res.json(leave);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 // Approve/Reject Leave
 router.put("/:id", protect, authorize("manager", "admin"), async (req, res) => {
-  const { status } = req.body;
   try {
-    const leave = await Leave.findByIdAndUpdate(
-      req.params.id,
-      { status },
-      { new: true }
-    ).populate("user", "name email leaveBalance");
+    const leave = await Leave.findById(req.params.id).populate("user");
+    if (!leave) return res.status(404).json({ message: "Leave not found" });
+
+    const { status, managerComments } = req.body;
+
     if (status === "approved") {
-      leave.user.leaveBalance[leave.type] -= leave.days;
+      const days = Math.ceil((new Date(leave.endDate) - new Date(leave.startDate)) / 86400000) + 1;
+      if (leave.user.leaveBalance[leave.type] < days) {
+        return res.status(400).json({ message: `Not enough ${leave.type} leave balance` });
+      }
+      leave.user.leaveBalance[leave.type] -= days;
       await leave.user.save();
     }
+
+    leave.status = status || leave.status;
+    leave.managerComments = managerComments;
+    await leave.save();
+
     res.json(leave);
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 });
 

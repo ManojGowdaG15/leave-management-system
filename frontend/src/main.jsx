@@ -1,15 +1,13 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App.jsx";
-import "./index.css";
-import { Toaster } from "react-hot-toast";
-import AuthProvider from "./context/AuthContext.jsx";
+import React from 'react'
+import ReactDOM from 'react-dom/client'
+import App from './App.jsx'
+import './index.css'
+import { ToastContainer } from 'react-toastify'
+import 'react-toastify/dist/ReactToastify.css'
 
-ReactDOM.createRoot(document.getElementById("root")).render(
+ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <AuthProvider>
-      <App />
-      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
-    </AuthProvider>
-  </React.StrictMode>
-);
+    <App />
+    <ToastContainer position="top-right" autoClose={3000} theme="colored" />
+  </React.StrictMode>,
+)

@@ -1,43 +1,106 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 const userSchema = new mongoose.Schema({
-    employeeId: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    name: {
-        type: String,
-        required: true
-    },
-    email: {
-        type: String,
-        required: true,
-        unique: true
-    },
-    password: {
-        type: String,
-        required: true
-    },
-    role: {
-        type: String,
-        enum: ['employee', 'manager', 'admin'],
-        default: 'employee'
-    },
-    department: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Department'
-    },
-    remainingLeaveDays: {
-        type: Number,
-        default: 20
-    },
-    joinedDate: {
-        type: Date,
-        default: Date.now
-    },
-    phone: String,
-    position: String
-}, { timestamps: true });
+  name: {
+    type: String,
+    required: [true, "Name is required"],
+    trim: true
+  },
+  email: {
+    type: String,
+    required: [true, "Email is required"],
+    unique: true,
+    lowercase: true,
+    trim: true,
+    match: [/^\S+@\S+\.\S+$/, "Please enter a valid email"]
+  },
+  password: {
+    type: String,
+    required: [true, "Password is required"],
+    minlength: [8, "Password must be at least 8 characters"],
+    select: false
+  },
+  employeeId: {
+    type: String,
+    unique: true,
+    trim: true
+  },
+  role: {
+    type: String,
+    enum: ["employee", "department_manager", "admin"],
+    default: "employee"
+  },
+  department: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Department",
+    required: true
+  },
+  position: {
+    type: String,
+    trim: true
+  },
+  // Security fields
+  failedLoginAttempts: {
+    type: Number,
+    default: 0,
+    select: false
+  },
+  isLocked: {
+    type: Boolean,
+    default: false,
+    select: false
+  },
+  lastFailedLogin: {
+    type: Date,
+    select: false
+  },
+  lastLogin: {
+    type: Date,
+    select: false
+  },
+  lastPasswordChange: {
+    type: Date,
+    default: Date.now,
+    select: false
+  },
+  joinDate: {
+    type: Date,
+    default: Date.now
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true
+});
 
-module.exports = mongoose.model('User', userSchema);
+// Hash password before saving
+userSchema.pre("save", async function(next) {
+  if (!this.isModified("password")) return next();
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    
+    // Auto-generate employee ID if not provided
+    if (!this.employeeId && this.isNew) {
+      const year = new Date().getFullYear().toString().slice(-2);
+      const random = Math.floor(1000 + Math.random() * 9000);
+      this.employeeId = `EMP${year}${random}`;
+    }
+    
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Method to compare password
+userSchema.methods.comparePassword = async function(candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+const User = mongoose.model("User", userSchema);
+export default User;

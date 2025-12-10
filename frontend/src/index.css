@@ -21,3 +21,6 @@ body {
   background: rgba(0, 0, 0, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
+.input-field {
+  @apply w-full px-5 py-4 rounded-xl bg-white/70 dark:bg-white/10 backdrop-blur border border-white/30 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20 transition-all duration-300 text-gray-900 dark:text-white placeholder-gray-500;
+}

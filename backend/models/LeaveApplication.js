@@ -1,91 +1,57 @@
+// backend/models/LeaveApplication.js
 const mongoose = require('mongoose');
 
 const leaveApplicationSchema = new mongoose.Schema({
-    user_id: {
+    user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
-    user_name: {
+    leaveType: {
         type: String,
+        enum: ['Casual', 'Sick', 'Earned'],
         required: true
     },
-    start_date: {
+    startDate: {
         type: Date,
         required: true
     },
-    end_date: {
+    endDate: {
         type: Date,
-        required: true
-    },
-    leave_type: {
-        type: String,
-        enum: ['casual', 'sick', 'earned'],
         required: true
     },
     reason: {
         type: String,
-        required: true,
-        trim: true
+        required: true
     },
-    status: {
-        type: String,
-        enum: ['pending', 'approved', 'rejected', 'cancelled'],
-        default: 'pending'
-    },
-    manager_comments: {
+    contactDuringLeave: {
         type: String,
         default: ''
     },
-    applied_date: {
+    status: {
+        type: String,
+        enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'],
+        default: 'Pending'
+    },
+    managerComments: {
+        type: String,
+        default: ''
+    },
+    appliedDate: {
         type: Date,
         default: Date.now
     },
-    approved_date: {
+    approvedDate: {
         type: Date
-    },
-    approved_by: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-    approved_by_name: {
-        type: String
-    },
-    leave_days: {
-        type: Number,
-        required: true,
-        min: 1
-    },
-    year: {
-        type: Number,
-        required: true
     }
 }, {
     timestamps: true
 });
 
-// Calculate leave days before saving
-leaveApplicationSchema.pre('save', function(next) {
-    if (this.start_date && this.end_date) {
-        const start = new Date(this.start_date);
-        const end = new Date(this.end_date);
-        const timeDiff = end.getTime() - start.getTime();
-        this.leave_days = Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
-        
-        // Set year for filtering
-        this.year = start.getFullYear();
-    }
-    
-    next();
+// Calculate leave duration in days
+leaveApplicationSchema.virtual('duration').get(function() {
+    const diffTime = Math.abs(new Date(this.endDate) - new Date(this.startDate));
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 });
 
-// Indexes
-leaveApplicationSchema.index({ user_id: 1 });
-leaveApplicationSchema.index({ status: 1 });
-leaveApplicationSchema.index({ start_date: 1 });
-leaveApplicationSchema.index({ end_date: 1 });
-leaveApplicationSchema.index({ year: 1 });
-leaveApplicationSchema.index({ user_id: 1, status: 1 });
-
-const LeaveApplication = mongoose.model('LeaveApplication', leaveApplicationSchema);
-module.exports = LeaveApplication;
+module.exports = mongoose.model('LeaveApplication', leaveApplicationSchema);

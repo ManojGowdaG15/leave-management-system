@@ -36,7 +36,10 @@ mongoose.connect(process.env.MONGO_URI, {
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+    origin: ['http://localhost:3000', 'http://localhost:3001'],
+    credentials: true
+}));
 app.use(morgan('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -44,10 +47,12 @@ app.use(express.urlencoded({ extended: true }));
 // Import routes
 const authRoutes = require('./routes/auth');
 const leaveRoutes = require('./routes/leave');
+const dashboardRoutes = require('./routes/dashboard'); // Add this line
 
 // Use routes
 app.use('/api/auth', authRoutes);
 app.use('/api/leave', leaveRoutes);
+app.use('/api/dashboard', dashboardRoutes); // Add this line
 
 // Root route
 app.get('/', (req, res) => {
@@ -67,6 +72,9 @@ app.get('/', (req, res) => {
                 pending: 'GET /api/leave/pending',
                 approve: 'PUT /api/leave/approve/:id',
                 teamCalendar: 'GET /api/leave/team-calendar'
+            },
+            dashboard: { // Add this section
+                dashboard: 'GET /api/dashboard'
             }
         },
         status: 'operational',

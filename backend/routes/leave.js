@@ -1,312 +1,375 @@
 const express = require('express');
 const router = express.Router();
-const LeaveApplication = require('../models/LeaveApplication');
-const User = require('../models/User');
 const { protect, authorize } = require('../middleware/auth');
+const LeaveApplication = require('../models/LeaveApplication');
+const LeaveBalance = require('../models/LeaveBalance');
 
+// @desc    Get leave balance
 // @route   GET /api/leave/balance
-// @desc    Get leave balance for current user
 // @access  Private
 router.get('/balance', protect, async (req, res) => {
     try {
-        const user = await User.findById(req.user.id);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
-        }
+        const userId = req.user._id;
         
-        res.json({
-            casual_leaves: user.leave_balance.casual_leaves,
-            sick_leaves: user.leave_balance.sick_leaves,
-            earned_leaves: user.leave_balance.earned_leaves
-        });
+        let balance = await LeaveBalance.findOne({ user: userId })
+            .select('casualLeaves sickLeaves earnedLeaves lastUpdated')
+            .lean();
+
+        if (!balance) {
+            // Create default balance
+            balance = {
+                casualLeaves: 12,
+                sickLeaves: 10,
+                earnedLeaves: 15,
+                lastUpdated: new Date()
+            };
+            await LeaveBalance.create({
+                user: userId,
+                ...balance
+            });
+        }
+
+        res.json(balance);
     } catch (error) {
         console.error('Get balance error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Failed to get leave balance' });
     }
 });
 
-// @route   POST /api/leave/apply
 // @desc    Apply for leave
+// @route   POST /api/leave/apply
 // @access  Private
 router.post('/apply', protect, async (req, res) => {
     try {
-        const { start_date, end_date, leave_type, reason } = req.body;
+        const userId = req.user._id;
+        const { leaveType, startDate, endDate, reason, contactDuringLeave } = req.body;
+
+        // Validate dates
+        const start = new Date(startDate);
+        const end = new Date(endDate);
         
-        // Validation
-        if (!start_date || !end_date || !leave_type || !reason) {
-            return res.status(400).json({ error: 'All fields are required' });
-        }
-        
-        const start = new Date(start_date);
-        const end = new Date(end_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (start < today) {
-            return res.status(400).json({ error: 'Start date cannot be in the past' });
-        }
-        
-        if (end < start) {
+        if (start > end) {
             return res.status(400).json({ error: 'End date must be after start date' });
         }
-        
-        // Calculate leave days
-        const leaveDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-        
-        // Get user with current leave balance
-        const user = await User.findById(req.user.id);
-        if (!user) {
-            return res.status(404).json({ error: 'User not found' });
+
+        if (start < new Date()) {
+            return res.status(400).json({ error: 'Cannot apply for past dates' });
         }
-        
+
+        // Calculate days
+        const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
         // Check leave balance
-        const balanceField = `${leave_type}_leaves`;
-        if (user.leave_balance[balanceField] < leaveDays) {
-            return res.status(400).json({ 
-                error: `Insufficient ${leave_type} leave balance. Available: ${user.leave_balance[balanceField]}, Required: ${leaveDays}` 
-            });
+        const balance = await LeaveBalance.findOne({ user: userId });
+        if (balance) {
+            const availableLeaves = balance[`${leaveType.toLowerCase()}Leaves`];
+            if (availableLeaves < days) {
+                return res.status(400).json({ 
+                    error: `Insufficient ${leaveType} leave balance. Available: ${availableLeaves} days, Required: ${days} days` 
+                });
+            }
         }
-        
+
         // Create leave application
         const leaveApplication = new LeaveApplication({
-            user_id: user._id,
-            user_name: user.name,
-            start_date: start,
-            end_date: end,
-            leave_type,
+            user: userId,
+            leaveType,
+            startDate: start,
+            endDate: end,
             reason,
-            leave_days: leaveDays,
-            year: start.getFullYear()
+            contactDuringLeave: contactDuringLeave || '',
+            status: 'Pending',
+            appliedDate: new Date()
         });
-        
+
         await leaveApplication.save();
-        
+
         res.status(201).json({
-            success: true,
             message: 'Leave application submitted successfully',
-            data: leaveApplication
+            leaveApplication
         });
-        
     } catch (error) {
         console.error('Apply leave error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Failed to apply for leave' });
     }
 });
 
+// @desc    Get leave history
 // @route   GET /api/leave/history
-// @desc    Get leave history for current user
 // @access  Private
 router.get('/history', protect, async (req, res) => {
     try {
-        const applications = await LeaveApplication.find({ 
-            user_id: req.user.id 
-        }).sort({ applied_date: -1 });
-        
+        const userId = req.user._id;
+        const { page = 1, limit = 10, filter } = req.query;
+
+        const query = { user: userId };
+        if (filter && filter !== 'all') {
+            query.status = filter;
+        }
+
+        const leaves = await LeaveApplication.find(query)
+            .sort({ appliedDate: -1 })
+            .skip((page - 1) * limit)
+            .limit(parseInt(limit))
+            .lean();
+
+        const total = await LeaveApplication.countDocuments(query);
+
         res.json({
-            success: true,
-            count: applications.length,
-            data: applications
+            leaves,
+            totalPages: Math.ceil(total / limit),
+            currentPage: parseInt(page),
+            total
         });
     } catch (error) {
         console.error('Get history error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Failed to get leave history' });
     }
 });
 
+// @desc    Cancel leave application
 // @route   PUT /api/leave/cancel/:id
-// @desc    Cancel a pending leave application
 // @access  Private
 router.put('/cancel/:id', protect, async (req, res) => {
     try {
-        const application = await LeaveApplication.findOne({
-            _id: req.params.id,
-            user_id: req.user.id,
-            status: 'pending'
+        const leaveId = req.params.id;
+        const userId = req.user._id;
+
+        const leave = await LeaveApplication.findOne({
+            _id: leaveId,
+            user: userId,
+            status: 'Pending'
         });
-        
-        if (!application) {
-            return res.status(400).json({ 
-                error: 'Cannot cancel this leave application. Either it does not exist, is not yours, or is not pending.' 
+
+        if (!leave) {
+            return res.status(404).json({ 
+                error: 'Leave not found or cannot be cancelled' 
             });
         }
-        
-        application.status = 'cancelled';
-        await application.save();
-        
-        res.json({
-            success: true,
-            message: 'Leave application cancelled successfully',
-            data: application
+
+        leave.status = 'Cancelled';
+        await leave.save();
+
+        res.json({ 
+            message: 'Leave cancelled successfully',
+            leave 
         });
     } catch (error) {
         console.error('Cancel leave error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Failed to cancel leave' });
     }
 });
 
+// @desc    Get pending leave requests (for managers)
 // @route   GET /api/leave/pending
-// @desc    Get pending leave requests for manager's team
-// @access  Private (Manager/Admin only)
-router.get('/pending', protect, authorize('manager', 'admin'), async (req, res) => {
+// @access  Private/Manager
+router.get('/pending', protect, authorize('manager'), async (req, res) => {
     try {
-        // Get all employees under this manager
-        const employees = await User.find({ 
-            $or: [
-                { manager_id: req.user.id },
-                { _id: { $in: await getAssignedEmployees(req.user.id) } }
-            ]
+        const managerId = req.user._id;
+        
+        // Get team members
+        const User = require('../models/User');
+        const teamMembers = await User.find({ manager: managerId })
+            .select('_id')
+            .lean();
+
+        const teamMemberIds = teamMembers.map(member => member._id);
+
+        const { page = 1, limit = 10 } = req.query;
+
+        const pendingRequests = await LeaveApplication.find({
+            user: { $in: teamMemberIds },
+            status: 'Pending'
+        })
+        .populate('user', 'name email')
+        .sort({ appliedDate: 1 })
+        .skip((page - 1) * limit)
+        .limit(parseInt(limit))
+        .lean();
+
+        const total = await LeaveApplication.countDocuments({
+            user: { $in: teamMemberIds },
+            status: 'Pending'
         });
-        
-        const employeeIds = employees.map(emp => emp._id);
-        
-        if (employeeIds.length === 0) {
-            return res.json({
-                success: true,
-                count: 0,
-                data: []
-            });
-        }
-        
-        const pendingLeaves = await LeaveApplication.find({
-            user_id: { $in: employeeIds },
-            status: 'pending'
-        }).sort({ applied_date: -1 });
-        
+
+        // Calculate days for each request
+        const requestsWithDays = pendingRequests.map(request => {
+            const start = new Date(request.startDate);
+            const end = new Date(request.endDate);
+            const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+            
+            return {
+                ...request,
+                days: days,
+                employee_name: request.user?.name,
+                employee_email: request.user?.email,
+                user: undefined // Remove populated user object
+            };
+        });
+
         res.json({
-            success: true,
-            count: pendingLeaves.length,
-            data: pendingLeaves
+            requests: requestsWithDays,
+            totalPages: Math.ceil(total / limit),
+            currentPage: parseInt(page),
+            total
         });
     } catch (error) {
-        console.error('Get pending leaves error:', error);
-        res.status(500).json({ error: 'Server error' });
+        console.error('Get pending requests error:', error);
+        res.status(500).json({ error: 'Failed to get pending requests' });
     }
 });
 
-// Helper function to get assigned employees
-async function getAssignedEmployees(managerId) {
-    // This would come from TeamAssignment model
-    // For now, return empty array
-    return [];
-}
-
+// @desc    Approve leave request
 // @route   PUT /api/leave/approve/:id
-// @desc    Approve or reject a leave application
-// @access  Private (Manager/Admin only)
-router.put('/approve/:id', protect, authorize('manager', 'admin'), async (req, res) => {
+// @access  Private/Manager
+router.put('/approve/:id', protect, authorize('manager'), async (req, res) => {
     try {
-        const { status, manager_comments } = req.body;
-        
-        if (!['approved', 'rejected'].includes(status)) {
-            return res.status(400).json({ error: 'Invalid status. Must be "approved" or "rejected"' });
+        const leaveId = req.params.id;
+        const { comments } = req.body;
+
+        const leave = await LeaveApplication.findById(leaveId)
+            .populate('user');
+
+        if (!leave) {
+            return res.status(404).json({ error: 'Leave request not found' });
         }
-        
-        const application = await LeaveApplication.findById(req.params.id);
-        if (!application || application.status !== 'pending') {
-            return res.status(404).json({ 
-                error: 'Leave application not found or already processed' 
-            });
+
+        // Check if manager is authorized (user's manager)
+        const managerId = req.user._id;
+        if (leave.user.manager.toString() !== managerId.toString()) {
+            return res.status(403).json({ error: 'Not authorized to approve this leave' });
         }
-        
-        // Check if manager can approve this leave
-        // Get the employee
-        const employee = await User.findById(application.user_id);
-        if (!employee) {
-            return res.status(404).json({ error: 'Employee not found' });
+
+        if (leave.status !== 'Pending') {
+            return res.status(400).json({ error: 'Leave is not in pending status' });
         }
-        
-        // Check if employee reports to this manager
-        const canApprove = employee.manager_id && 
-                          employee.manager_id.toString() === req.user.id;
-        
-        if (!canApprove && req.user.role !== 'admin') {
-            return res.status(403).json({ 
-                error: 'You can only approve leaves for your team members' 
-            });
-        }
-        
+
+        // Update leave balance
+        const start = new Date(leave.startDate);
+        const end = new Date(leave.endDate);
+        const days = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+
+        await LeaveBalance.updateBalance(leave.user._id, leave.leaveType, days);
+
         // Update leave application
-        application.status = status;
-        application.manager_comments = manager_comments || '';
-        application.approved_date = new Date();
-        application.approved_by = req.user.id;
-        application.approved_by_name = req.user.name;
-        
-        await application.save();
-        
-        // Update leave balance if approved
-        if (status === 'approved') {
-            const user = await User.findById(application.user_id);
-            if (user) {
-                const balanceField = `${application.leave_type}_leaves`;
-                user.leave_balance[balanceField] -= application.leave_days;
-                user.leave_balance.updated_at = new Date();
-                await user.save();
-            }
-        }
-        
-        res.json({
-            success: true,
-            message: `Leave application ${status} successfully`,
-            data: application
+        leave.status = 'Approved';
+        leave.managerComments = comments || '';
+        leave.approvedDate = new Date();
+        await leave.save();
+
+        res.json({ 
+            message: 'Leave approved successfully',
+            leave 
         });
     } catch (error) {
         console.error('Approve leave error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Failed to approve leave' });
     }
 });
 
-// @route   GET /api/leave/team-calendar
-// @desc    Get team leave calendar for manager
-// @access  Private (Manager/Admin only)
-router.get('/team-calendar', protect, authorize('manager', 'admin'), async (req, res) => {
+// @desc    Reject leave request
+// @route   PUT /api/leave/reject/:id
+// @access  Private/Manager
+router.put('/reject/:id', protect, authorize('manager'), async (req, res) => {
     try {
-        // Get all employees under this manager
-        const employees = await User.find({ 
-            $or: [
-                { manager_id: req.user.id },
-                { _id: { $in: await getAssignedEmployees(req.user.id) } }
-            ]
-        });
-        
-        const employeeIds = employees.map(emp => emp._id);
-        
-        if (employeeIds.length === 0) {
-            return res.json({
-                success: true,
-                data: []
-            });
+        const leaveId = req.params.id;
+        const { reason } = req.body;
+
+        if (!reason || reason.trim() === '') {
+            return res.status(400).json({ error: 'Rejection reason is required' });
         }
-        
-        const calendarData = await LeaveApplication.find({
-            user_id: { $in: employeeIds },
-            status: { $in: ['approved', 'pending'] }
-        })
-        .select('user_name start_date end_date leave_type status')
-        .sort({ start_date: 1 });
-        
-        // Format for calendar view
-        const formattedData = calendarData.map(leave => ({
-            id: leave._id,
-            title: `${leave.user_name} - ${leave.leave_type}`,
-            start: leave.start_date,
-            end: new Date(new Date(leave.end_date).getTime() + 24 * 60 * 60 * 1000), // Add 1 day for full day event
-            backgroundColor: leave.status === 'approved' ? '#10B981' : '#F59E0B', // Green for approved, yellow for pending
-            borderColor: leave.status === 'approved' ? '#10B981' : '#F59E0B',
-            textColor: '#FFFFFF',
-            extendedProps: {
-                leave_type: leave.leave_type,
-                status: leave.status
-            }
-        }));
-        
-        res.json({
-            success: true,
-            data: formattedData
+
+        const leave = await LeaveApplication.findById(leaveId)
+            .populate('user');
+
+        if (!leave) {
+            return res.status(404).json({ error: 'Leave request not found' });
+        }
+
+        // Check if manager is authorized
+        const managerId = req.user._id;
+        if (leave.user.manager.toString() !== managerId.toString()) {
+            return res.status(403).json({ error: 'Not authorized to reject this leave' });
+        }
+
+        if (leave.status !== 'Pending') {
+            return res.status(400).json({ error: 'Leave is not in pending status' });
+        }
+
+        leave.status = 'Rejected';
+        leave.managerComments = reason;
+        await leave.save();
+
+        res.json({ 
+            message: 'Leave rejected successfully',
+            leave 
         });
     } catch (error) {
+        console.error('Reject leave error:', error);
+        res.status(500).json({ error: 'Failed to reject leave' });
+    }
+});
+
+// @desc    Get team calendar (for managers)
+// @route   GET /api/leave/team-calendar
+// @access  Private/Manager
+router.get('/team-calendar', protect, authorize('manager'), async (req, res) => {
+    try {
+        const managerId = req.user._id;
+        
+        // Get team members
+        const User = require('../models/User');
+        const teamMembers = await User.find({ manager: managerId })
+            .select('_id name')
+            .lean();
+
+        const teamMemberIds = teamMembers.map(member => member._id);
+
+        const leaves = await LeaveApplication.find({
+            user: { $in: teamMemberIds },
+            status: { $in: ['Pending', 'Approved'] }
+        })
+        .populate('user', 'name')
+        .sort({ startDate: 1 })
+        .lean();
+
+        const calendarData = leaves.map(leave => {
+            // Color coding based on status and leave type
+            let color = '#FF6B6B'; // Default red for pending
+            
+            if (leave.status === 'Approved') {
+                if (leave.leaveType === 'Casual') color = '#4ECDC4';
+                else if (leave.leaveType === 'Sick') color = '#45B7D1';
+                else if (leave.leaveType === 'Earned') color = '#96CEB4';
+            }
+
+            const start = new Date(leave.startDate);
+            const end = new Date(leave.endDate);
+            end.setDate(end.getDate() + 1); // Include end date
+
+            return {
+                id: leave._id,
+                title: `${leave.user?.name || 'Unknown'} - ${leave.leaveType}`,
+                start: start,
+                end: end,
+                allDay: true,
+                backgroundColor: color,
+                borderColor: color,
+                extendedProps: {
+                    userId: leave.user?._id,
+                    userName: leave.user?.name || 'Unknown',
+                    leaveType: leave.leaveType,
+                    reason: leave.reason,
+                    status: leave.status,
+                    comments: leave.managerComments
+                }
+            };
+        });
+
+        res.json(calendarData);
+    } catch (error) {
         console.error('Get team calendar error:', error);
-        res.status(500).json({ error: 'Server error' });
+        res.status(500).json({ error: 'Failed to get team calendar' });
     }
 });
 

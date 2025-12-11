@@ -8,11 +8,18 @@ import {
   CheckCircleIcon, 
   XCircleIcon,
   UserGroupIcon,
-  ArrowTrendingUpIcon
+  ArrowTrendingUpIcon,
+  UsersIcon,
+  CalendarDaysIcon
 } from '@heroicons/react/24/outline';
 
 const Dashboard = ({ user }) => {
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState({
+    totalLeaves: 0,
+    pendingLeaves: 0,
+    approvedLeaves: 0,
+    rejectedLeaves: 0
+  });
   const [recentLeaves, setRecentLeaves] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -25,24 +32,49 @@ const Dashboard = ({ user }) => {
   const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/dashboard', {
+      const response = await axios.get('http://localhost:5000/api/dashboard', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setStats(response.data.stats);
+      
+      setStats(response.data.stats || {
+        totalLeaves: 0,
+        pendingLeaves: 0,
+        approvedLeaves: 0,
+        rejectedLeaves: 0
+      });
+      
       setRecentLeaves(response.data.recentLeaves || []);
       setPendingRequests(response.data.pendingRequests || []);
       setLoading(false);
     } catch (err) {
+      console.error('Dashboard error:', err);
       setError('Failed to load dashboard data');
       toast.error('Failed to load dashboard data');
       setLoading(false);
+      
+      // Set dummy data for development
+      setStats({
+        totalLeaves: 5,
+        pendingLeaves: 2,
+        approvedLeaves: 3,
+        rejectedLeaves: 0
+      });
+      setRecentLeaves([
+        { id: 1, leave_type: 'Casual', start_date: '2024-12-15', end_date: '2024-12-16', status: 'Approved' },
+        { id: 2, leave_type: 'Sick', start_date: '2024-12-20', end_date: '2024-12-21', status: 'Pending' }
+      ]);
+      if (user?.role === 'manager') {
+        setPendingRequests([
+          { id: 1, employee_name: 'John Doe', leave_type: 'Casual', days: 2 }
+        ]);
+      }
     }
   };
 
   const statCards = [
     {
       title: 'Total Leaves',
-      value: stats?.totalLeaves || 0,
+      value: stats.totalLeaves,
       icon: CalendarIcon,
       color: 'bg-blue-500',
       textColor: 'text-blue-600',
@@ -50,7 +82,7 @@ const Dashboard = ({ user }) => {
     },
     {
       title: 'Pending',
-      value: stats?.pendingLeaves || 0,
+      value: stats.pendingLeaves,
       icon: ClockIcon,
       color: 'bg-yellow-500',
       textColor: 'text-yellow-600',
@@ -58,7 +90,7 @@ const Dashboard = ({ user }) => {
     },
     {
       title: 'Approved',
-      value: stats?.approvedLeaves || 0,
+      value: stats.approvedLeaves,
       icon: CheckCircleIcon,
       color: 'bg-green-500',
       textColor: 'text-green-600',
@@ -66,7 +98,7 @@ const Dashboard = ({ user }) => {
     },
     {
       title: 'Rejected',
-      value: stats?.rejectedLeaves || 0,
+      value: stats.rejectedLeaves,
       icon: XCircleIcon,
       color: 'bg-red-500',
       textColor: 'text-red-600',
@@ -81,9 +113,11 @@ const Dashboard = ({ user }) => {
     </div>
   );
 
-  if (error) return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
-      {error}
+  if (error && !stats.totalLeaves) return (
+    <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700">
+      <h3 className="font-bold mb-2">Error Loading Dashboard</h3>
+      <p>{error}</p>
+      <p className="text-sm mt-2">Using sample data for demonstration.</p>
     </div>
   );
 
@@ -91,14 +125,24 @@ const Dashboard = ({ user }) => {
     <div className="space-y-6">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-800 rounded-xl p-6 text-white">
-        <h1 className="text-2xl font-bold mb-2">
-          Welcome back, {user?.name}!
-        </h1>
-        <p className="opacity-90">
-          {user?.role === 'manager' 
-            ? 'Manage your team leaves and approvals'
-            : 'Track your leaves and apply for time off'}
-        </p>
+        <div className="flex flex-col md:flex-row md:items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold mb-2">
+              Welcome back, {user?.name || 'User'}!
+            </h1>
+            <p className="opacity-90">
+              {user?.role === 'manager' 
+                ? 'Manage your team leaves and approvals'
+                : 'Track your leaves and apply for time off'}
+            </p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            <div className="flex items-center bg-blue-700 bg-opacity-50 rounded-lg px-4 py-2">
+              <UsersIcon className="h-5 w-5 mr-2" />
+              <span className="capitalize">{user?.role || 'Employee'}</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Quick Stats */}
@@ -141,12 +185,20 @@ const Dashboard = ({ user }) => {
           <div className="p-4">
             {recentLeaves.length > 0 ? (
               <div className="space-y-4">
-                {recentLeaves.slice(0, 5).map((leave) => (
-                  <div key={leave.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                {recentLeaves.map((leave, index) => (
+                  <div key={leave.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-medium text-gray-800">{leave.leave_type} Leave</p>
                       <p className="text-sm text-gray-600">
-                        {new Date(leave.start_date).toLocaleDateString()} - {new Date(leave.end_date).toLocaleDateString()}
+                        {new Date(leave.start_date).toLocaleDateString('en-US', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })} - {new Date(leave.end_date).toLocaleDateString('en-US', { 
+                          day: 'numeric', 
+                          month: 'short', 
+                          year: 'numeric' 
+                        })}
                       </p>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
@@ -154,13 +206,16 @@ const Dashboard = ({ user }) => {
                       leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
                       'bg-red-100 text-red-800'
                     }`}>
-                      {leave.status}
+                      {leave.status || 'Pending'}
                     </span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-gray-500 text-center py-4">No recent leaves</p>
+              <div className="text-center py-8">
+                <CalendarIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No recent leaves found</p>
+              </div>
             )}
             <div className="mt-4 text-center">
               <Link to="/leave-history" className="text-blue-600 hover:underline">
@@ -182,12 +237,12 @@ const Dashboard = ({ user }) => {
             <div className="p-4">
               {pendingRequests.length > 0 ? (
                 <div className="space-y-4">
-                  {pendingRequests.slice(0, 5).map((request) => (
-                    <div key={request.id} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
+                  {pendingRequests.map((request, index) => (
+                    <div key={request.id || index} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
                       <div>
-                        <p className="font-medium text-gray-800">{request.employee_name}</p>
+                        <p className="font-medium text-gray-800">{request.employee_name || 'Team Member'}</p>
                         <p className="text-sm text-gray-600">
-                          {request.leave_type} • {request.days} day(s)
+                          {request.leave_type || 'Leave'} • {request.days || 1} day(s)
                         </p>
                       </div>
                       <Link 
@@ -200,7 +255,10 @@ const Dashboard = ({ user }) => {
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-500 text-center py-4">No pending approvals</p>
+                <div className="text-center py-8">
+                  <CheckCircleIcon className="h-12 w-12 text-green-300 mx-auto mb-3" />
+                  <p className="text-gray-500">No pending approvals</p>
+                </div>
               )}
               <div className="mt-4 text-center">
                 <Link to="/team-requests" className="text-blue-600 hover:underline">
@@ -241,7 +299,7 @@ const Dashboard = ({ user }) => {
                 >
                   <div className="flex items-center">
                     <div className="p-2 bg-green-600 rounded-lg mr-3">
-                      <ClockIcon className="h-5 w-5 text-white" />
+                      <CalendarDaysIcon className="h-5 w-5 text-white" />
                     </div>
                     <div>
                       <p className="font-medium text-gray-800">Check Leave Balance</p>
@@ -280,6 +338,20 @@ const Dashboard = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Error Notice */}
+      {error && (
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center">
+            <ClockIcon className="h-5 w-5 text-yellow-600 mr-2" />
+            <div>
+              <p className="text-yellow-700 text-sm">
+                Note: Dashboard is showing sample data. Backend integration is in progress.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

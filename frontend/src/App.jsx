@@ -10,7 +10,7 @@ import LeaveHistory from './pages/LeaveHistory';
 import TeamRequests from './pages/TeamRequests';
 import TeamCalendar from './pages/TeamCalendar';
 import LeaveBalance from './pages/LeaveBalance';
-import { authService } from './services/auth';
+import authService from './services/auth'; // Changed from named import to default import
 import './index.css';
 
 function App() {
@@ -19,7 +19,7 @@ function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = authService.getUser();
+    const storedUser = authService.getUser(); // Now using default import
     if (storedUser) {
       setUser(storedUser);
     }
@@ -27,7 +27,7 @@ function App() {
   }, []);
 
   const handleLogout = () => {
-    authService.logout();
+    authService.logout(); // Now using default import
     setUser(null);
     window.location.href = '/login';
   };

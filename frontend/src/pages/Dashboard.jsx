@@ -22,12 +22,13 @@ const Dashboard = ({ user }) => {
   });
   const [recentLeaves, setRecentLeaves] = useState([]);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [leaveBalance, setLeaveBalance] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [user]);
 
   const fetchDashboardData = async () => {
     try {
@@ -36,38 +37,54 @@ const Dashboard = ({ user }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      setStats(response.data.stats || {
-        totalLeaves: 0,
-        pendingLeaves: 0,
-        approvedLeaves: 0,
-        rejectedLeaves: 0
-      });
+      console.log('Dashboard response:', response.data);
       
-      setRecentLeaves(response.data.recentLeaves || []);
-      setPendingRequests(response.data.pendingRequests || []);
+      // Set stats
+      if (response.data.stats) {
+        setStats(response.data.stats);
+      }
+      
+      // Set recent leaves
+      if (response.data.recentLeaves) {
+        const mappedLeaves = response.data.recentLeaves.map(leave => ({
+          id: leave._id,
+          leave_type: leave.leaveType,
+          start_date: leave.startDate,
+          end_date: leave.endDate,
+          status: leave.status,
+          reason: leave.reason,
+          employee_name: leave.employee_name,
+          applied_date: leave.appliedDate
+        }));
+        setRecentLeaves(mappedLeaves);
+      }
+      
+      // Set pending requests for managers
+      if (response.data.pendingRequests) {
+        const mappedRequests = response.data.pendingRequests.map(request => ({
+          id: request._id,
+          employee_name: request.employee_name,
+          employee_email: request.employee_email,
+          leave_type: request.leaveType,
+          days: request.days,
+          start_date: request.startDate,
+          end_date: request.endDate,
+          reason: request.reason
+        }));
+        setPendingRequests(mappedRequests);
+      }
+      
+      // Set leave balance for employees
+      if (response.data.leaveBalance) {
+        setLeaveBalance(response.data.leaveBalance);
+      }
+      
       setLoading(false);
     } catch (err) {
-      console.error('Dashboard error:', err);
+      console.error('Dashboard error:', err.response || err);
       setError('Failed to load dashboard data');
       toast.error('Failed to load dashboard data');
       setLoading(false);
-      
-      // Set dummy data for development
-      setStats({
-        totalLeaves: 5,
-        pendingLeaves: 2,
-        approvedLeaves: 3,
-        rejectedLeaves: 0
-      });
-      setRecentLeaves([
-        { id: 1, leave_type: 'Casual', start_date: '2024-12-15', end_date: '2024-12-16', status: 'Approved' },
-        { id: 2, leave_type: 'Sick', start_date: '2024-12-20', end_date: '2024-12-21', status: 'Pending' }
-      ]);
-      if (user?.role === 'manager') {
-        setPendingRequests([
-          { id: 1, employee_name: 'John Doe', leave_type: 'Casual', days: 2 }
-        ]);
-      }
     }
   };
 
@@ -106,18 +123,21 @@ const Dashboard = ({ user }) => {
     }
   ];
 
-  if (loading) return (
-    <div className="text-center py-12">
-      <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-      <p className="mt-4 text-gray-600">Loading dashboard...</p>
-    </div>
-  );
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric'
+    });
+  };
 
-  if (error && !stats.totalLeaves) return (
-    <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-red-700">
-      <h3 className="font-bold mb-2">Error Loading Dashboard</h3>
-      <p>{error}</p>
-      <p className="text-sm mt-2">Using sample data for demonstration.</p>
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+        <p className="mt-4 text-gray-600">Loading dashboard...</p>
+      </div>
     </div>
   );
 
@@ -144,6 +164,51 @@ const Dashboard = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Leave Balance for Employees */}
+      {user?.role === 'employee' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Casual Leaves</p>
+                <h3 className="text-2xl font-bold text-blue-600">
+                  {leaveBalance.casualLeaves || 12} days
+                </h3>
+              </div>
+              <div className="p-3 bg-blue-100 rounded-full">
+                <CalendarIcon className="h-6 w-6 text-blue-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Sick Leaves</p>
+                <h3 className="text-2xl font-bold text-yellow-600">
+                  {leaveBalance.sickLeaves || 10} days
+                </h3>
+              </div>
+              <div className="p-3 bg-yellow-100 rounded-full">
+                <ClockIcon className="h-6 w-6 text-yellow-600" />
+              </div>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Earned Leaves</p>
+                <h3 className="text-2xl font-bold text-green-600">
+                  {leaveBalance.earnedLeaves || 15} days
+                </h3>
+              </div>
+              <div className="p-3 bg-green-100 rounded-full">
+                <CheckCircleIcon className="h-6 w-6 text-green-600" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Quick Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -187,27 +252,32 @@ const Dashboard = ({ user }) => {
               <div className="space-y-4">
                 {recentLeaves.map((leave, index) => (
                   <div key={leave.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <p className="font-medium text-gray-800">{leave.leave_type} Leave</p>
-                      <p className="text-sm text-gray-600">
-                        {new Date(leave.start_date).toLocaleDateString('en-US', { 
-                          day: 'numeric', 
-                          month: 'short', 
-                          year: 'numeric' 
-                        })} - {new Date(leave.end_date).toLocaleDateString('en-US', { 
-                          day: 'numeric', 
-                          month: 'short', 
-                          year: 'numeric' 
-                        })}
-                      </p>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-medium text-gray-800">
+                            {leave.leave_type} Leave
+                            {leave.employee_name && (
+                              <span className="text-sm text-gray-600 ml-2">({leave.employee_name})</span>
+                            )}
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {formatDate(leave.start_date)} - {formatDate(leave.end_date)}
+                          </p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                          leave.status === 'Approved' ? 'bg-green-100 text-green-800' :
+                          leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
+                          leave.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {leave.status || 'Pending'}
+                        </span>
+                      </div>
+                      {leave.reason && (
+                        <p className="text-sm text-gray-500 mt-2 line-clamp-1">{leave.reason}</p>
+                      )}
                     </div>
-                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                      leave.status === 'Approved' ? 'bg-green-100 text-green-800' :
-                      leave.status === 'Pending' ? 'bg-yellow-100 text-yellow-800' :
-                      'bg-red-100 text-red-800'
-                    }`}>
-                      {leave.status || 'Pending'}
-                    </span>
                   </div>
                 ))}
               </div>
@@ -215,6 +285,9 @@ const Dashboard = ({ user }) => {
               <div className="text-center py-8">
                 <CalendarIcon className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No recent leaves found</p>
+                <Link to="/apply-leave" className="text-blue-600 hover:underline mt-2 inline-block">
+                  Apply for your first leave
+                </Link>
               </div>
             )}
             <div className="mt-4 text-center">
@@ -231,7 +304,7 @@ const Dashboard = ({ user }) => {
             <div className="p-4 border-b border-gray-200">
               <h5 className="font-bold flex items-center text-gray-800">
                 <UserGroupIcon className="h-5 w-5 mr-2" />
-                Pending Approvals
+                Pending Approvals ({pendingRequests.length})
               </h5>
             </div>
             <div className="p-4">
@@ -239,15 +312,18 @@ const Dashboard = ({ user }) => {
                 <div className="space-y-4">
                   {pendingRequests.map((request, index) => (
                     <div key={request.id || index} className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg">
-                      <div>
-                        <p className="font-medium text-gray-800">{request.employee_name || 'Team Member'}</p>
+                      <div className="flex-1">
+                        <p className="font-medium text-gray-800">{request.employee_name}</p>
                         <p className="text-sm text-gray-600">
-                          {request.leave_type || 'Leave'} • {request.days || 1} day(s)
+                          {request.leave_type} • {request.days} day(s)
+                        </p>
+                        <p className="text-sm text-gray-500 mt-1 line-clamp-1">
+                          {request.reason}
                         </p>
                       </div>
                       <Link 
                         to="/team-requests"
-                        className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors"
+                        className="px-3 py-1 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700 transition-colors whitespace-nowrap ml-4"
                       >
                         Review
                       </Link>
@@ -258,6 +334,7 @@ const Dashboard = ({ user }) => {
                 <div className="text-center py-8">
                   <CheckCircleIcon className="h-12 w-12 text-green-300 mx-auto mb-3" />
                   <p className="text-gray-500">No pending approvals</p>
+                  <p className="text-sm text-gray-400 mt-1">All caught up!</p>
                 </div>
               )}
               <div className="mt-4 text-center">
@@ -308,6 +385,22 @@ const Dashboard = ({ user }) => {
                   </div>
                   <span className="text-green-600">→</span>
                 </Link>
+
+                <Link 
+                  to="/leave-history"
+                  className="flex items-center justify-between p-4 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors"
+                >
+                  <div className="flex items-center">
+                    <div className="p-2 bg-purple-600 rounded-lg mr-3">
+                      <ClockIcon className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-800">View Leave History</p>
+                      <p className="text-sm text-gray-600">Check past applications</p>
+                    </div>
+                  </div>
+                  <span className="text-purple-600">→</span>
+                </Link>
               </div>
             </div>
           </div>
@@ -346,7 +439,7 @@ const Dashboard = ({ user }) => {
             <ClockIcon className="h-5 w-5 text-yellow-600 mr-2" />
             <div>
               <p className="text-yellow-700 text-sm">
-                Note: Dashboard is showing sample data. Backend integration is in progress.
+                {error}
               </p>
             </div>
           </div>

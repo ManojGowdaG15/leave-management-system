@@ -1,54 +1,79 @@
 const jwt = require('jsonwebtoken');
-const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 
-const protect = asyncHandler(async (req, res, next) => {
-    let token;
+const protect = async (req, res, next) => {
+  let token;
 
-    if (
-        req.headers.authorization &&
-        req.headers.authorization.startsWith('Bearer')
-    ) {
-        try {
-            // Get token from header
-            token = req.headers.authorization.split(' ')[1];
+  // Check for token in headers
+  if (
+    req.headers.authorization &&
+    req.headers.authorization.startsWith('Bearer')
+  ) {
+    // Set token from Bearer token in header
+    token = req.headers.authorization.split(' ')[1];
+  }
 
-            // Verify token
-            const decoded = jwt.verify(token, process.env.JWT_SECRET || 'secret');
+  // Make sure token exists
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Not authorized to access this route. No token provided.'
+    });
+  }
 
-            // Get user from the token
-            req.user = await User.findById(decoded.id).select('-password');
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-            next();
-        } catch (error) {
-            console.error(error);
-            res.status(401);
-            throw new Error('Not authorized');
-        }
+    // Get user from the token
+    req.user = await User.findById(decoded.id).select('-password');
+    
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found'
+      });
     }
 
-    if (!token) {
-        res.status(401);
-        throw new Error('Not authorized, no token');
+    next();
+  } catch (error) {
+    console.error('Auth middleware error:', error.message);
+    
+    if (error.name === 'JsonWebTokenError') {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid token. Please login again.'
+      });
     }
-});
-
-const isManager = asyncHandler(async (req, res, next) => {
-    if (req.user && (req.user.role === 'manager' || req.user.role === 'admin')) {
-        next();
-    } else {
-        res.status(403);
-        throw new Error('Not authorized as manager');
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        success: false,
+        error: 'Token expired. Please login again.'
+      });
     }
-});
+    
+    return res.status(401).json({
+      success: false,
+      error: 'Not authorized to access this route'
+    });
+  }
+};
 
-const isAdmin = asyncHandler(async (req, res, next) => {
-    if (req.user && req.user.role === 'admin') {
-        next();
-    } else {
-        res.status(403);
-        throw new Error('Not authorized as admin');
+// Grant access to specific roles
+const authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        error: `User role ${req.user.role} is not authorized to access this route`
+      });
     }
-});
+    next();
+  };
+};
 
-module.exports = { protect, isManager, isAdmin };
+module.exports = {
+  protect,
+  authorize
+};

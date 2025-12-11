@@ -1,66 +1,124 @@
 const express = require('express');
 const cors = require('cors');
-const dotenv = require('dotenv');
-const connectDB = require('./config/db');
-const errorHandler = require('./middleware/errorHandler');
-
-// Load env vars
-dotenv.config();
-
-// Connect to database
-connectDB();
-
 const app = express();
 
-// Body parser
+app.use(cors());
 app.use(express.json());
 
-// Enable CORS
-app.use(cors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
-    credentials: true,
-}));
+// In-memory storage
+const users = [
+    { id: 1, email: 'manager@test.com', password: 'manager123', name: 'Manager', role: 'manager' },
+    { id: 2, email: 'employee@test.com', password: 'employee123', name: 'Employee', role: 'employee' }
+];
 
-// Mount routers
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/leaves', require('./routes/leaveRoutes'));
-app.use('/api/employee', require('./routes/employeeRoutes'));
-app.use('/api/manager', require('./routes/managerRoutes'));
+let leaves = [];
+let tokenCounter = 1;
 
-// Welcome route
-app.get('/', (req, res) => {
-    res.json({
-        success: true,
-        message: '🚀 Leave Management System API is running',
-        version: '1.0.0',
-        endpoints: {
-            auth: '/api/auth',
-            leaves: '/api/leaves',
-            employee: '/api/employee',
-            manager: '/api/manager',
-        },
-        sample_users: {
-            manager: { email: 'manager@test.com', password: 'manager123' },
-            employee: { email: 'employee@test.com', password: 'employee123' },
-        },
+// Login
+app.post('/api/auth/login', (req, res) => {
+    const { email, password } = req.body;
+    const user = users.find(u => u.email === email && u.password === password);
+    
+    if (user) {
+        const token = `token_${user.id}_${tokenCounter++}`;
+        res.json({
+            success: true,
+            token: token,
+            user: { id: user.id, email: user.email, name: user.name, role: user.role }
+        });
+    } else {
+        res.status(401).json({ success: false, error: 'Invalid credentials' });
+    }
+});
+
+// Apply leave
+app.post('/api/leaves', (req, res) => {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ 
+            success: false, 
+            error: 'No token. Please login first.' 
+        });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const userId = token.split('_')[1]; // Extract user ID from token
+    
+    const user = users.find(u => u.id == userId);
+    
+    if (!user) {
+        return res.status(401).json({ 
+            success: false, 
+            error: 'Invalid token' 
+        });
+    }
+    
+    const leave = {
+        id: leaves.length + 1,
+        employeeId: user.id,
+        employeeName: user.name,
+        ...req.body,
+        status: 'pending',
+        appliedDate: new Date().toISOString()
+    };
+    
+    leaves.push(leave);
+    
+    res.json({ 
+        success: true, 
+        message: 'Leave applied successfully!', 
+        data: leave 
     });
 });
 
-// Error handler middleware
-app.use(errorHandler);
-
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, () => {
-    console.log(`✅ Server running on port ${PORT}`);
-    console.log(`📚 API Documentation: http://localhost:${PORT}`);
-    console.log(`👤 Test Manager: manager@test.com / manager123`);
-    console.log(`👤 Test Employee: employee@test.com / employee123`);
+// Get leaves
+app.get('/api/leaves', (req, res) => {
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ 
+            success: false, 
+            error: 'No token' 
+        });
+    }
+    
+    const token = authHeader.split(' ')[1];
+    const userId = token.split('_')[1];
+    
+    const userLeaves = leaves.filter(l => l.employeeId == userId);
+    
+    res.json({ 
+        success: true, 
+        count: userLeaves.length, 
+        data: userLeaves 
+    });
 });
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
-    console.error(`❌ Error: ${err.message}`);
-    // Close server & exit process
-    // server.close(() => process.exit(1));
+// Home
+app.get('/', (req, res) => {
+    res.json({ 
+        message: 'Leave Management API (Memory DB)',
+        status: 'working',
+        endpoints: [
+            'POST /api/auth/login',
+            'POST /api/leaves',
+            'GET /api/leaves'
+        ]
+    });
+});
+
+const PORT = 5000;
+app.listen(PORT, () => {
+    console.log(`
+    🎉 BACKEND RUNNING!
+    ===================
+    ✅ Server: http://localhost:${PORT}
+    ✅ No MongoDB needed
+    ✅ Test login works
+    
+    🔑 Test Credentials:
+       • manager@test.com / manager123
+       • employee@test.com / employee123
+    `);
 });

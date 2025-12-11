@@ -1,15 +1,9 @@
-// backend/models/LeaveApplication.js
 const mongoose = require('mongoose');
 
 const leaveApplicationSchema = new mongoose.Schema({
-    user: {
+    userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
-    },
-    leaveType: {
-        type: String,
-        enum: ['Casual', 'Sick', 'Earned'],
         required: true
     },
     startDate: {
@@ -20,18 +14,19 @@ const leaveApplicationSchema = new mongoose.Schema({
         type: Date,
         required: true
     },
+    leaveType: {
+        type: String,
+        enum: ['casual', 'sick', 'earned'],
+        required: true
+    },
     reason: {
         type: String,
         required: true
     },
-    contactDuringLeave: {
-        type: String,
-        default: ''
-    },
     status: {
         type: String,
-        enum: ['Pending', 'Approved', 'Rejected', 'Cancelled'],
-        default: 'Pending'
+        enum: ['pending', 'approved', 'rejected', 'cancelled'],
+        default: 'pending'
     },
     managerComments: {
         type: String,
@@ -41,17 +36,14 @@ const leaveApplicationSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
-    approvedDate: {
-        type: Date
+    daysCount: {
+        type: Number,
+        required: true
+    },
+    managerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     }
-}, {
-    timestamps: true
-});
-
-// Calculate leave duration in days
-leaveApplicationSchema.virtual('duration').get(function() {
-    const diffTime = Math.abs(new Date(this.endDate) - new Date(this.startDate));
-    return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 });
 
 module.exports = mongoose.model('LeaveApplication', leaveApplicationSchema);

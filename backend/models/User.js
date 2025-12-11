@@ -1,19 +1,16 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
 
 const userSchema = new mongoose.Schema({
     name: {
         type: String,
-        required: true,
-        trim: true
+        required: true
     },
     email: {
         type: String,
         required: true,
         unique: true,
-        lowercase: true,
-        trim: true
+        lowercase: true
     },
     password: {
         type: String,
@@ -24,60 +21,37 @@ const userSchema = new mongoose.Schema({
         enum: ['employee', 'manager', 'admin'],
         default: 'employee'
     },
-    manager_id: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        default: null
-    },
     department: {
         type: String,
-        default: ''
+        default: 'Engineering'
     },
-    leave_balance: {
-        casual_leaves: { type: Number, default: 12 },
-        sick_leaves: { type: Number, default: 10 },
-        earned_leaves: { type: Number, default: 15 },
-        updated_at: { type: Date, default: Date.now }
+    managerId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     },
-    created_at: {
+    leaveBalance: {
+        casual: { type: Number, default: 12 },
+        sick: { type: Number, default: 10 },
+        earned: { type: Number, default: 15 }
+    },
+    createdAt: {
         type: Date,
         default: Date.now
     }
-}, {
-    timestamps: true
 });
 
 // Hash password before saving
 userSchema.pre('save', async function(next) {
     if (!this.isModified('password')) return next();
     
-    try {
-        const salt = await bcrypt.genSalt(10);
-        this.password = await bcrypt.hash(this.password, salt);
-        next();
-    } catch (error) {
-        next(error);
-    }
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
 });
 
-// Method to compare password
-userSchema.methods.comparePassword = async function(candidatePassword) {
-    return await bcrypt.compare(candidatePassword, this.password);
+// Compare password method
+userSchema.methods.comparePassword = async function(password) {
+    return await bcrypt.compare(password, this.password);
 };
 
-// Method to generate JWT token
-userSchema.methods.generateAuthToken = function() {
-    return jwt.sign(
-        { 
-            id: this._id, 
-            email: this.email, 
-            role: this.role, 
-            name: this.name 
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-    );
-};
-
-const User = mongoose.model('User', userSchema);
-module.exports = User;
+module.exports = mongoose.model('User', userSchema);

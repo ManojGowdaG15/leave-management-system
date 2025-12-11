@@ -1,41 +1,65 @@
-// Create folder: mkdir src/utils
-// Then create this file: touch src/utils/helpers.js
+import { LEAVE_STATUS } from './constants';
 
 export const formatDate = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', {
-    day: 'numeric',
+    year: 'numeric',
     month: 'short',
-    year: 'numeric'
+    day: 'numeric',
   });
 };
 
-export const calculateLeaveDays = (startDate, endDate) => {
-  if (!startDate || !endDate) return 0;
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const timeDiff = end.getTime() - start.getTime();
-  return Math.ceil(timeDiff / (1000 * 3600 * 24)) + 1;
+export const formatDateTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
+export const formatCurrency = (amount) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+  }).format(amount);
 };
 
 export const getStatusBadge = (status) => {
-  const statusConfig = {
-    pending: { color: 'bg-yellow-100 text-yellow-800', text: 'Pending' },
-    approved: { color: 'bg-green-100 text-green-800', text: 'Approved' },
-    rejected: { color: 'bg-red-100 text-red-800', text: 'Rejected' },
-    cancelled: { color: 'bg-gray-100 text-gray-800', text: 'Cancelled' },
+  const statusConfig = LEAVE_STATUS[status] || LEAVE_STATUS.pending;
+  return {
+    label: statusConfig.label,
+    className: `${statusConfig.bgColor} ${statusConfig.textColor}`,
   };
-  
-  return statusConfig[status] || statusConfig.pending;
 };
 
-export const getLeaveTypeBadge = (type) => {
-  const typeConfig = {
-    casual: { color: 'bg-blue-100 text-blue-800', text: 'Casual' },
-    sick: { color: 'bg-green-100 text-green-800', text: 'Sick' },
-    earned: { color: 'bg-purple-100 text-purple-800', text: 'Earned' },
+export const calculateDays = (startDate, endDate) => {
+  if (!startDate || !endDate) return 0;
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const diffTime = Math.abs(end - start);
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+};
+
+export const validateEmail = (email) => {
+  const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+  return re.test(String(email).toLowerCase());
+};
+
+export const truncateText = (text, length = 50) => {
+  if (text.length <= length) return text;
+  return text.substring(0, length) + '...';
+};
+
+export const debounce = (func, delay) => {
+  let timeoutId;
+  return (...args) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => func.apply(this, args), delay);
   };
-  
-  return typeConfig[type] || { color: 'bg-gray-100 text-gray-800', text: type };
 };

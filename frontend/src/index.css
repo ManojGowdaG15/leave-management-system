@@ -1,7 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
+@import 'bootstrap/dist/css/bootstrap.min.css';
 @layer base {
   body {
     @apply antialiased text-gray-800 bg-gray-50;

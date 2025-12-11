@@ -9,6 +9,7 @@ import ApplyLeave from './pages/ApplyLeave';
 import LeaveHistory from './pages/LeaveHistory';
 import TeamRequests from './pages/TeamRequests';
 import TeamCalendar from './pages/TeamCalendar';
+import LeaveBalance from './pages/LeaveBalance';
 import { authService } from './services/auth';
 import './index.css';
 
@@ -24,6 +25,12 @@ function App() {
     }
     setLoading(false);
   }, []);
+
+  const handleLogout = () => {
+    authService.logout();
+    setUser(null);
+    window.location.href = '/login';
+  };
 
   if (loading) {
     return (
@@ -55,6 +62,7 @@ function App() {
             isOpen={sidebarOpen} 
             user={user}
             onClose={() => setSidebarOpen(false)}
+            onLogout={handleLogout}
           />
 
           {/* Main content */}
@@ -62,20 +70,59 @@ function App() {
             <Header 
               user={user} 
               toggleSidebar={() => setSidebarOpen(true)}
+              onLogout={handleLogout}
             />
             
             <main className="flex-1 p-4 md:p-6">
               <Routes>
-                <Route path="/" element={<Dashboard />} />
-                <Route path="/apply-leave" element={<ApplyLeave />} />
-                <Route path="/leave-history" element={<LeaveHistory />} />
-                <Route path="/leave-balance" element={<Dashboard />} />
-                <Route path="/team-requests" element={<TeamRequests />} />
-                <Route path="/team-calendar" element={<TeamCalendar />} />
-                <Route path="/settings" element={<div className="p-6"><h1 className="text-2xl font-bold">Settings</h1></div>} />
+                <Route path="/" element={<Dashboard user={user} />} />
+                <Route path="/apply-leave" element={<ApplyLeave user={user} />} />
+                <Route path="/leave-history" element={<LeaveHistory user={user} />} />
+                <Route path="/leave-balance" element={<LeaveBalance user={user} />} />
+                
+                {/* Manager-only routes */}
+                {user.role === 'manager' && (
+                  <>
+                    <Route path="/team-requests" element={<TeamRequests user={user} />} />
+                    <Route path="/team-calendar" element={<TeamCalendar user={user} />} />
+                  </>
+                )}
+                
+                {/* Redirect unauthorized access */}
+                {user.role !== 'manager' && (
+                  <>
+                    <Route path="/team-requests" element={<Navigate to="/" />} />
+                    <Route path="/team-calendar" element={<Navigate to="/" />} />
+                  </>
+                )}
+                
+                <Route path="/profile" element={
+                  <div className="p-6 bg-white rounded-lg shadow">
+                    <h1 className="text-2xl font-bold mb-4">Profile</h1>
+                    <div className="space-y-3">
+                      <p><strong>Name:</strong> {user.name}</p>
+                      <p><strong>Email:</strong> {user.email}</p>
+                      <p><strong>Role:</strong> <span className="capitalize">{user.role}</span></p>
+                      <p><strong>Employee ID:</strong> {user.employeeId || 'N/A'}</p>
+                    </div>
+                  </div>
+                } />
+                
                 <Route path="*" element={<Navigate to="/" />} />
               </Routes>
             </main>
+            
+            {/* Footer */}
+            <footer className="bg-white border-t border-gray-200 py-4 px-6">
+              <div className="flex flex-col md:flex-row justify-between items-center">
+                <p className="text-gray-600 text-sm">
+                  © 2025 Leave Management System
+                </p>
+                <p className="text-gray-500 text-xs mt-2 md:mt-0">
+                  DataSturdy Consulting - Assignment
+                </p>
+              </div>
+            </footer>
           </div>
         </div>
       ) : (

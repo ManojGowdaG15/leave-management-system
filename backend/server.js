@@ -9,12 +9,14 @@ const app = express();
 
 // ==================== CORS CONFIGURATION ====================
 const allowedOrigins = [
-  'https://leave-management-system-zlf8.vercel.app',   // Primary Vercel domain
-  'https://leave-management-system-1-kv66.onrender.com', // Backend
+  'https://leave-management-system-zlf8.vercel.app',
+  'https://leave-management-system-1-kv66.onrender.com',
   'http://localhost:3000',
   'http://localhost:5000',
-  'http://localhost:5173'
+  'http://localhost:5173',
+  'https://leave-management-system-zlf8-9yl4ojrec-manoj-gowda-gs-projects.vercel.app' // Add this
 ];
+
 
 
 const corsOptions = {

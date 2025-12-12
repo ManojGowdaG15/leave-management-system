@@ -29,17 +29,9 @@ const LeaveApplicationSchema = new mongoose.Schema({
         enum: ['pending', 'approved', 'rejected', 'cancelled'],
         default: 'pending'
     },
-    managerComments: {
-        type: String,
-        default: ''
-    },
     appliedDate: {
         type: Date,
         default: Date.now
-    },
-    daysCount: {
-        type: Number,
-        required: true
     }
 });
 

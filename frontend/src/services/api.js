@@ -48,6 +48,14 @@ export const leaveAPI = {
     getTeamCalendar: () => API.get('/leave/team-calendar'),
 };
 
+// Expense services (if implemented)
+export const expenseAPI = {
+    submitExpense: (data) => API.post('/expense/submit', data),
+    getMyExpenses: () => API.get('/expense/my-expenses'),
+    getPendingExpenses: () => API.get('/expense/pending'),
+    approveExpense: (id, data) => API.put(`/expense/approve/${id}`, data),
+};
+
 // Dashboard services
 export const dashboardAPI = {
     getEmployeeDashboard: () => API.get('/dashboard/employee'),

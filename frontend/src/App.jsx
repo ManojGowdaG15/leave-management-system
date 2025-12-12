@@ -16,26 +16,39 @@ function App() {
         <Router>
             <div className="min-h-screen bg-gray-50">
                 <Routes>
+                    {/* Public Routes */}
                     <Route path="/" element={<LandingPage />} />
                     <Route path="/login" element={<LoginPage />} />
                     <Route path="/register" element={<RegisterPage />} />
                     
-                    {/* Protected Routes */}
+                    {/* Employee Dashboard */}
                     <Route path="/employee/*" element={
                         <PrivateRoute allowedRoles={['employee']}>
                             <EmployeeDashboard />
                         </PrivateRoute>
                     } />
                     
+                    {/* Manager Dashboard */}
                     <Route path="/manager/*" element={
                         <PrivateRoute allowedRoles={['manager']}>
                             <ManagerDashboard />
                         </PrivateRoute>
                     } />
                     
+                    {/* Catch all - redirect to home */}
                     <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
-                <ToastContainer position="top-right" />
+                <ToastContainer 
+                    position="top-right" 
+                    autoClose={3000}
+                    hideProgressBar={false}
+                    newestOnTop={false}
+                    closeOnClick
+                    rtl={false}
+                    pauseOnFocusLoss
+                    draggable
+                    pauseOnHover
+                />
             </div>
         </Router>
     );

@@ -16,21 +16,6 @@ It handles authentication, leave workflow, user hierarchy, leave policies, and d
 
 ---
 
-##  Folder Structure
-
-backend/
-│── controllers/
-│── models/
-│── routes/
-│── middlewares/
-│── config/
-│── seed/
-│── server.js
-│── package.json
-│── .env (not included)
-
-
----
 ##  Seeding Data
 
 Run seeder from backend folder:
@@ -114,4 +99,5 @@ npm start
 - View leave policies
 
 ---
+
 

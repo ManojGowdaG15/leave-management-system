@@ -1,32 +1,66 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-const auth = async (req, res, next) => {
+exports.protect = async (req, res, next) => {
+  let token;
+
+  // Check for token in headers
+  if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+    token = req.headers.authorization.split(' ')[1];
+  }
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      message: 'Please authenticate to access this resource'
+    });
+  }
+
   try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-    if (!token) {
-      throw new Error();
-    }
-
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    const user = await User.findOne({ _id: decoded.userId, isActive: true });
-
-    if (!user) {
-      throw new Error();
-    }
-
-    req.token = token;
-    req.user = {
-      userId: user._id,
-      role: user.role,
-      email: user.email
-    };
     
+    // Get user from database
+    const user = await User.findById(decoded.id).select('-password');
+    
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+    
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'User account is deactivated'
+      });
+    }
+    
+    // Update last login
+    user.lastLogin = Date.now();
+    await user.save();
+    
+    // Attach user to request
+    req.user = user;
     next();
   } catch (error) {
-    res.status(401).json({ error: 'Please authenticate' });
+    return res.status(401).json({
+      success: false,
+      message: 'Invalid or expired token'
+    });
   }
 };
 
-module.exports = auth;
+// Role-based authorization
+exports.authorize = (...roles) => {
+  return (req, res, next) => {
+    if (!roles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: `Role ${req.user.role} is not authorized to access this resource`
+      });
+    }
+    next();
+  };
+};

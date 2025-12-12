@@ -1,154 +1,33 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const User = require('../models/User');
+const { protect, authorize } = require('../middleware/auth');
+const userController = require('../controllers/userController');
 
-// Get all users (admin only)
-router.get('/', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
+// All routes protected
+router.use(protect);
 
-    const users = await User.find({}, '-password');
-    res.json(users);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Get current user
+router.get('/me', userController.getMe);
+
+// Get all users (Admin/HR)
+router.get('/', authorize('admin', 'hr'), userController.getAllUsers);
 
 // Get user by ID
-router.get('/:id', auth, async (req, res) => {
-  try {
-    const user = await User.findById(req.params.id, '-password');
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    res.json(user);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+router.get('/:id', authorize('admin', 'hr', 'manager'), userController.getUserById);
 
-// Get team members (for manager)
-router.get('/team/members', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'manager' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
+// Update user (Admin/HR or self)
+router.put('/:id', userController.updateUser);
 
-    const teamMembers = await User.find(
-      { managerId: req.user.userId, isActive: true },
-      '-password'
-    );
-    res.json(teamMembers);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Delete user (Admin only)
+router.delete('/:id', authorize('admin'), userController.deleteUser);
 
-// Update user
-router.put('/:id', auth, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updates = req.body;
-    
-    // Check permissions
-    if (req.user.userId !== id && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
+// Get team members (for managers)
+router.get('/team/members', authorize('manager'), userController.getTeamMembers);
 
-    // Remove sensitive fields
-    delete updates.password;
-    delete updates.email;
+// Get department users
+router.get('/department/:department', authorize('admin', 'hr', 'manager'), userController.getUsersByDepartment);
 
-    const user = await User.findByIdAndUpdate(
-      id,
-      updates,
-      { new: true, runValidators: true }
-    ).select('-password');
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json(user);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Update leave balance (admin only)
-router.put('/:id/leave-balance', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const { casual, sick, earned } = req.body;
-    const user = await User.findById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    user.leaveBalance = {
-      casual: casual || user.leaveBalance.casual,
-      sick: sick || user.leaveBalance.sick,
-      earned: earned || user.leaveBalance.earned
-    };
-
-    await user.save();
-    res.json({ message: 'Leave balance updated successfully', leaveBalance: user.leaveBalance });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Delete user (admin only)
-router.delete('/:id', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    res.json({ message: 'User deleted successfully' });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Assign manager to employee
-router.post('/:id/assign-manager', auth, async (req, res) => {
-  try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied' });
-    }
-
-    const { managerId } = req.body;
-    const user = await User.findById(req.params.id);
-
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    const manager = await User.findById(managerId);
-    if (!manager || manager.role !== 'manager') {
-      return res.status(400).json({ error: 'Invalid manager' });
-    }
-
-    user.managerId = managerId;
-    await user.save();
-
-    res.json({ message: 'Manager assigned successfully', user });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-});
+// Update leave balance (Admin/HR)
+router.put('/:id/leave-balance', authorize('admin', 'hr'), userController.updateLeaveBalance);
 
 module.exports = router;

@@ -7,10 +7,52 @@ require('dotenv').config();
 
 const app = express();
 
-// Middleware
-app.use(cors());
+// ==================== CORS CONFIGURATION ====================
+const allowedOrigins = [
+  'https://leave-management-system-4-8l74.onrender.com', // Your frontend
+  'https://leave-management-system-1-kv66.onrender.com',  // Your backend
+  'http://localhost:3000',
+  'http://localhost:5000',
+  'http://localhost:5173'  // Vite dev server
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      console.log('🚫 Blocked by CORS:', origin);
+      console.log('✅ Allowed origins:', allowedOrigins);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range']
+};
+
+// Apply CORS middleware
+app.use(cors(corsOptions));
+
+// Handle preflight requests
+app.options('*', cors(corsOptions));
+// ==================== END CORS CONFIGURATION ====================
+
+// Other middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.originalUrl} | Origin: ${req.headers.origin}`);
+  next();
+});
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
@@ -62,12 +104,6 @@ const auth = async (req, res, next) => {
   }
 };
 
-// Add request logging middleware
-app.use((req, res, next) => {
-  console.log(`📨 ${req.method} ${req.originalUrl}`);
-  next();
-});
-
 // Basic route
 app.get('/', (req, res) => {
   res.json({
@@ -75,6 +111,10 @@ app.get('/', (req, res) => {
     version: '1.0.0',
     status: 'running',
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    cors: {
+      allowedOrigins: allowedOrigins,
+      frontend: 'https://leave-management-system-4-8l74.onrender.com'
+    },
     endpoints: {
       auth: {
         login: 'POST /api/auth/login',
@@ -104,7 +144,7 @@ app.get('/', (req, res) => {
       dashboard: {
         main: 'GET /api/dashboard',
         stats: 'GET /api/dashboard/stats',
-        basic: 'GET /api/dashboard/basic' // NEW: Always works for employees
+        basic: 'GET /api/dashboard/basic'
       }
     }
   });
@@ -116,7 +156,10 @@ app.get('/health', (req, res) => {
     status: 'healthy',
     timestamp: new Date().toISOString(),
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    cors: {
+      allowedOrigins: allowedOrigins
+    }
   });
 });
 
@@ -125,6 +168,9 @@ app.get('/health', (req, res) => {
 // Login
 app.post('/api/auth/login', async (req, res) => {
   try {
+    console.log('🔐 Login attempt from:', req.headers.origin);
+    console.log('📧 Email:', req.body.email);
+    
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -137,6 +183,7 @@ app.post('/api/auth/login', async (req, res) => {
     const user = await User.findOne({ email }).select('+password');
     
     if (!user) {
+      console.log('❌ User not found:', email);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -146,6 +193,7 @@ app.post('/api/auth/login', async (req, res) => {
     const isPasswordValid = await bcrypt.compare(password, user.password);
     
     if (!isPasswordValid) {
+      console.log('❌ Invalid password for:', email);
       return res.status(401).json({
         success: false,
         message: 'Invalid credentials'
@@ -168,6 +216,8 @@ app.post('/api/auth/login', async (req, res) => {
       expiresIn: '30d'
     });
 
+    console.log('✅ Login successful for:', user.email);
+    
     res.json({
       success: true,
       token,
@@ -189,7 +239,7 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('❌ Login error:', error);
     res.status(500).json({
       success: false,
       message: 'Server error'
@@ -576,6 +626,7 @@ app.get('/api/dashboard/employee-simple', auth, async (req, res) => {
     });
   }
 });
+
 // ==================== LEAVE ROUTES ====================
 
 // Apply for leave
@@ -1507,5 +1558,6 @@ app.listen(PORT, () => {
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`🌐 API available at http://localhost:${PORT}`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+  console.log(`✅ CORS configured for: https://leave-management-system-4-8l74.onrender.com`);
   console.log('='.repeat(50) + '\n');
 });

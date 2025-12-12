@@ -105,7 +105,7 @@ app.get('/', (req, res) => {
     database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
     cors: {
       allowedOrigins: allowedOrigins,
-      frontend: 'https://leave-management-system-4-8l74.onrender.com'
+      frontend: 'https://leave-management-system-zlf8.vercel.app'
     },
     endpoints: {
       auth: {
@@ -1550,6 +1550,6 @@ app.listen(PORT, () => {
   console.log(`📡 Server running on port ${PORT}`);
   console.log(`🌐 API available at http://localhost:${PORT}`);
   console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-  console.log(`✅ CORS configured for: https://leave-management-system-4-8l74.onrender.com`);
+  console.log(`✅ CORS configured for: https://leave-management-system-zlf8.vercel.app`);
   console.log('='.repeat(50) + '\n');
 });

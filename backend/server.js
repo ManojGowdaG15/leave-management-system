@@ -9,12 +9,13 @@ const app = express();
 
 // ==================== CORS CONFIGURATION ====================
 const allowedOrigins = [
-  'https://leave-management-system-zlf8.vercel.app',  // your real frontend
-  'https://leave-management-system-1-kv66.onrender.com', // your backend
+  'https://leave-management-system-zlf8.vercel.app',   // Primary Vercel domain
+  'https://leave-management-system-1-kv66.onrender.com', // Backend
   'http://localhost:3000',
   'http://localhost:5000',
   'http://localhost:5173'
 ];
+
 
 const corsOptions = {
   origin: function (origin, callback) {

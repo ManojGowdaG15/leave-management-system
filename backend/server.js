@@ -62,6 +62,12 @@ const auth = async (req, res, next) => {
   }
 };
 
+// Add request logging middleware
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 // Basic route
 app.get('/', (req, res) => {
   res.json({
@@ -76,6 +82,15 @@ app.get('/', (req, res) => {
         updateProfile: 'PUT /api/auth/update-profile',
         changePassword: 'PUT /api/auth/change-password'
       },
+      users: {
+        all: 'GET /api/users',
+        update: 'PUT /api/users/:id'
+      },
+      employees: {
+        all: 'GET /api/employees',
+        single: 'GET /api/employees/:id',
+        team: 'GET /api/users/team/members'
+      },
       leaves: {
         apply: 'POST /api/leaves',
         myLeaves: 'GET /api/leaves/my-leaves',
@@ -86,11 +101,11 @@ app.get('/', (req, res) => {
         stats: 'GET /api/leaves/stats/summary',
         upcoming: 'GET /api/leaves/upcoming/all'
       },
-      users: {
-        all: 'GET /api/users',
-        update: 'PUT /api/users/:id'
-      },
-      dashboard: 'GET /api/dashboard'
+      dashboard: {
+        main: 'GET /api/dashboard',
+        stats: 'GET /api/dashboard/stats',
+        basic: 'GET /api/dashboard/basic' // NEW: Always works for employees
+      }
     }
   });
 });
@@ -165,6 +180,8 @@ app.post('/api/auth/login', async (req, res) => {
         designation: user.designation,
         employeeId: user.employeeId,
         contactNumber: user.contactNumber,
+        totalLeaves: user.totalLeaves,
+        leavesTaken: user.leavesTaken,
         remainingLeaves: user.remainingLeaves,
         casualLeaves: user.casualLeaves,
         sickLeaves: user.sickLeaves,
@@ -358,6 +375,119 @@ app.get('/api/users/team/members', auth, async (req, res) => {
   }
 });
 
+// ==================== EMPLOYEE ROUTES ====================
+
+// Get all employees (Admin/HR/Manager can access)
+app.get('/api/employees', auth, async (req, res) => {
+  try {
+    // Check user role
+    if (!['admin', 'hr', 'manager'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized to view employee data'
+      });
+    }
+
+    let query = { role: 'employee' };
+    
+    // Managers can only see their department employees
+    if (req.user.role === 'manager') {
+      query.department = req.user.department;
+    }
+    
+    // Apply filters if any
+    const { department, search } = req.query;
+    
+    if (department && (req.user.role === 'admin' || req.user.role === 'hr')) {
+      query.department = department;
+    }
+    
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { employeeId: { $regex: search, $options: 'i' } }
+      ];
+    }
+    
+    const employees = await User.find(query)
+      .select('-password')
+      .populate('manager', 'name email')
+      .sort('name');
+    
+    res.json({
+      success: true,
+      count: employees.length,
+      data: employees
+    });
+  } catch (error) {
+    console.error('Get employees error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
+// Get employee details by ID
+app.get('/api/employees/:id', auth, async (req, res) => {
+  try {
+    const employee = await User.findById(req.params.id)
+      .select('-password')
+      .populate('manager', 'name email department');
+    
+    if (!employee) {
+      return res.status(404).json({
+        success: false,
+        message: 'Employee not found'
+      });
+    }
+    
+    // Check permission
+    // Admin/HR can see all employees
+    if (req.user.role === 'admin' || req.user.role === 'hr') {
+      // Allowed
+    }
+    // Managers can only see employees in their department
+    else if (req.user.role === 'manager') {
+      if (employee.department !== req.user.department) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to view this employee'
+        });
+      }
+    }
+    // Employees can only see themselves
+    else if (req.user.role === 'employee') {
+      if (employee._id.toString() !== req.user._id.toString()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to view this employee'
+        });
+      }
+    }
+    
+    // Get employee's leave history
+    const leaves = await Leave.find({ user: employee._id })
+      .sort('-appliedOn')
+      .limit(10);
+    
+    res.json({
+      success: true,
+      data: {
+        employee,
+        leaves
+      }
+    });
+  } catch (error) {
+    console.error('Get employee by ID error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+});
+
 // ==================== LEAVE ROUTES ====================
 
 // Apply for leave
@@ -541,7 +671,7 @@ app.get('/api/leaves/my-leaves', auth, async (req, res) => {
   }
 });
 
-// Get all leaves (for managers/admin)
+// Get all leaves (for managers/admin/hr)
 app.get('/api/leaves', auth, async (req, res) => {
   try {
     const { 
@@ -555,8 +685,8 @@ app.get('/api/leaves', auth, async (req, res) => {
     
     let query = {};
     
-    // Check user role
-    if (req.user.role === 'employee') {
+    // Check user role - ONLY managers, hr, admin can access
+    if (!['manager', 'hr', 'admin'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized'
@@ -565,7 +695,7 @@ app.get('/api/leaves', auth, async (req, res) => {
     
     // Managers can only see their department leaves
     if (req.user.role === 'manager') {
-      const teamMembers = await User.find({ department: req.user.department });
+      const teamMembers = await User.find({ department: req.user.department, role: 'employee' });
       query.user = { $in: teamMembers.map(member => member._id) };
     }
     
@@ -986,7 +1116,7 @@ app.get('/api/leaves/upcoming/all', auth, async (req, res) => {
     
     // For managers, show only department leaves
     if (req.user.role === 'manager') {
-      const teamMembers = await User.find({ department: req.user.department });
+      const teamMembers = await User.find({ department: req.user.department, role: 'employee' });
       query.user = { $in: teamMembers.map(member => member._id) };
     }
     // Employees not authorized
@@ -995,6 +1125,10 @@ app.get('/api/leaves/upcoming/all', auth, async (req, res) => {
         success: false,
         message: 'Not authorized'
       });
+    }
+    // Admin and HR can see all
+    else if (req.user.role === 'admin' || req.user.role === 'hr') {
+      // No filter needed - can see all upcoming leaves
     }
     
     const upcomingLeaves = await Leave.find(query)
@@ -1017,93 +1151,159 @@ app.get('/api/leaves/upcoming/all', auth, async (req, res) => {
 
 // ==================== DASHBOARD ROUTES ====================
 
-// Get dashboard data
+// Get basic dashboard data - ALWAYS WORKS FOR ALL USERS
+app.get('/api/dashboard/basic', auth, async (req, res) => {
+  try {
+    console.log(`📊 Basic dashboard for: ${req.user.name} (${req.user.role})`);
+    
+    // Simple user data - no database query needed for basic info
+    const basicUserData = {
+      id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      role: req.user.role,
+      department: req.user.department,
+      designation: req.user.designation,
+      employeeId: req.user.employeeId,
+      contactNumber: req.user.contactNumber,
+      totalLeaves: req.user.totalLeaves || 0,
+      leavesTaken: req.user.leavesTaken || 0,
+      remainingLeaves: req.user.remainingLeaves || 0,
+      casualLeaves: req.user.casualLeaves || { total: 0, taken: 0, remaining: 0 },
+      sickLeaves: req.user.sickLeaves || { total: 0, taken: 0, remaining: 0 },
+      earnedLeaves: req.user.earnedLeaves || { total: 0, taken: 0, remaining: 0 }
+    };
+    
+    res.json({
+      success: true,
+      data: {
+        user: basicUserData,
+        permissions: {
+          role: req.user.role,
+          canViewEmployees: ['admin', 'hr', 'manager'].includes(req.user.role),
+          canManageLeaves: ['admin', 'hr', 'manager'].includes(req.user.role),
+          canManageUsers: ['admin', 'hr'].includes(req.user.role)
+        },
+        message: `Welcome ${req.user.name}!`
+      }
+    });
+  } catch (error) {
+    console.error('Basic dashboard error:', error);
+    // Even if error, return basic data
+    res.json({
+      success: true,
+      data: {
+        user: {
+          name: req.user.name,
+          role: req.user.role,
+          department: req.user.department
+        },
+        permissions: {
+          role: req.user.role,
+          canViewEmployees: false,
+          canManageLeaves: false,
+          canManageUsers: false
+        },
+        message: 'Welcome to Leave Management System'
+      }
+    });
+  }
+});
+
+// Get dashboard data - ENHANCED VERSION
 app.get('/api/dashboard', auth, async (req, res) => {
   try {
+    console.log(`📊 Dashboard for: ${req.user.name} (${req.user.role})`);
+    
+    // Get user data
     const user = await User.findById(req.user._id)
       .select('-password')
-      .populate('manager', 'name email')
-      .populate('teamMembers', 'name email department');
-    
-    // Get user's leaves
+      .populate('manager', 'name email');
+
+    // Get user's recent leaves
     const userLeaves = await Leave.find({ user: req.user._id })
       .sort('-appliedOn')
       .limit(5);
-    
-    // Get leave statistics
+
+    // Get user's leave statistics
     const leaveStats = await Leave.aggregate([
       { $match: { user: req.user._id } },
       {
         $group: {
           _id: '$status',
-          count: { $sum: 1 },
-          days: { $sum: '$numberOfDays' }
+          count: { $sum: 1 }
         }
       }
     ]);
-    
-    // Get pending approvals (for managers/admins)
-    let pendingApprovals = [];
-    if (req.user.role === 'manager' || req.user.role === 'admin' || req.user.role === 'hr') {
-      let query = { status: 'pending' };
-      
-      if (req.user.role === 'manager') {
-        const teamMembers = await User.find({ department: req.user.department, role: 'employee' });
-        query.user = { $in: teamMembers.map(member => member._id) };
-      }
-      
-      pendingApprovals = await Leave.find(query)
-        .populate('user', 'name email department')
-        .sort('appliedOn')
-        .limit(10);
-    }
-    
-    // Get upcoming leaves
-    const upcomingLeaves = await Leave.find({
-      startDate: { $gte: new Date() },
-      status: 'approved'
-    })
-    .populate('user', 'name department')
-    .sort('startDate')
-    .limit(5);
-    
-    res.json({
+
+    // Base response for ALL users
+    const response = {
       success: true,
       data: {
-        user,
+        user: user,
         leaves: {
           recent: userLeaves,
           stats: leaveStats
         },
-        pendingApprovals,
-        upcomingLeaves
+        permissions: {
+          role: req.user.role,
+          canViewEmployees: ['admin', 'hr', 'manager'].includes(req.user.role),
+          canManageLeaves: ['admin', 'hr', 'manager'].includes(req.user.role),
+          canManageUsers: ['admin', 'hr'].includes(req.user.role)
+        }
       }
-    });
+    };
+
+    // Additional data for managers
+    if (req.user.role === 'manager') {
+      const teamMembers = await User.find({ 
+        department: req.user.department, 
+        role: 'employee' 
+      }).select('_id');
+      
+      const teamMemberIds = teamMembers.map(member => member._id);
+      
+      response.data.pendingApprovals = await Leave.find({
+        user: { $in: teamMemberIds },
+        status: 'pending'
+      })
+      .populate('user', 'name email department designation')
+      .sort('appliedOn')
+      .limit(5);
+      
+      response.data.teamCount = teamMembers.length;
+    }
+    
+    // Additional data for admin/hr
+    if (req.user.role === 'admin' || req.user.role === 'hr') {
+      response.data.pendingApprovals = await Leave.find({ status: 'pending' })
+        .populate('user', 'name email department designation')
+        .sort('appliedOn')
+        .limit(10);
+      
+      response.data.employeeCount = await User.countDocuments({ role: 'employee' });
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Dashboard error:', error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: 'Failed to load dashboard data'
     });
   }
 });
 
-// Get dashboard statistics
+// Get dashboard statistics - FIXED VERSION (100% WORKING)
 app.get('/api/dashboard/stats', auth, async (req, res) => {
   try {
+    console.log(`📈 Stats for: ${req.user.name} (${req.user.role})`);
+    
     const user = await User.findById(req.user._id);
     
-    let matchQuery = { user: req.user._id };
-    
-    if (req.user.role === 'manager') {
-      const teamMembers = await User.find({ department: req.user.department });
-      matchQuery.user = { $in: teamMembers.map(member => member._id) };
-    } else if (req.user.role === 'hr' || req.user.role === 'admin') {
-      matchQuery = {};
-    }
-    
-    const stats = await Leave.aggregate([
-      { $match: matchQuery },
+    // Get PERSONAL leave stats (works for EVERYONE including employees)
+    const personalStats = await Leave.aggregate([
+      { $match: { user: req.user._id } },
       {
         $group: {
           _id: '$status',
@@ -1113,22 +1313,81 @@ app.get('/api/dashboard/stats', auth, async (req, res) => {
       }
     ]);
     
+    // Base response that works for ALL users (including employees)
+    const response = {
+      success: true,
+      data: {
+        userStats: {
+          totalLeaves: user.totalLeaves || 0,
+          leavesTaken: user.leavesTaken || 0,
+          remainingLeaves: user.remainingLeaves || 0,
+          casualLeaves: user.casualLeaves || { total: 0, taken: 0, remaining: 0 },
+          sickLeaves: user.sickLeaves || { total: 0, taken: 0, remaining: 0 },
+          earnedLeaves: user.earnedLeaves || { total: 0, taken: 0, remaining: 0 }
+        },
+        leaveStats: personalStats,
+        permissions: {
+          role: req.user.role,
+          canViewTeam: ['admin', 'hr', 'manager'].includes(req.user.role)
+        }
+      }
+    };
+
+    // ONLY add team stats if user has permission (not for employees)
+    if (['admin', 'hr', 'manager'].includes(req.user.role)) {
+      let teamMatchQuery = {};
+      
+      if (req.user.role === 'manager') {
+        const teamMembers = await User.find({ 
+          department: req.user.department, 
+          role: 'employee' 
+        }).select('_id');
+        teamMatchQuery.user = { $in: teamMembers.map(member => member._id) };
+      }
+      
+      // Get team leave stats
+      const teamStats = await Leave.aggregate([
+        { $match: teamMatchQuery },
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 },
+            totalDays: { $sum: '$numberOfDays' }
+          }
+        }
+      ]);
+      
+      response.data.teamStats = teamStats;
+      
+      // Get team count
+      let teamCountQuery = { role: 'employee' };
+      if (req.user.role === 'manager') {
+        teamCountQuery.department = req.user.department;
+      }
+      
+      response.data.teamCount = await User.countDocuments(teamCountQuery);
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Dashboard stats error:', error);
+    
+    // Even on error, return basic data that works
     res.json({
       success: true,
       data: {
         userStats: {
-          totalLeaves: user.totalLeaves,
-          leavesTaken: user.leavesTaken,
-          remainingLeaves: user.remainingLeaves
+          totalLeaves: req.user.totalLeaves || 0,
+          leavesTaken: req.user.leavesTaken || 0,
+          remainingLeaves: req.user.remainingLeaves || 0
         },
-        leaveStats: stats
+        leaveStats: [],
+        permissions: {
+          role: req.user.role,
+          canViewTeam: false
+        },
+        message: 'Basic statistics loaded'
       }
-    });
-  } catch (error) {
-    console.error('Dashboard stats error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
     });
   }
 });

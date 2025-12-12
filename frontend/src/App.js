@@ -1,423 +1,106 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Container,
-  Paper,
-  Typography,
-  Box,
-  TextField,
-  Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Grid,
-  Card,
-  CardContent,
-  Alert,
-  CircularProgress,
-  FormControlLabel,
-  Switch
-} from '@mui/material';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../components/contexts/AuthContext';
-import api from '../services/api';
-import { toast } from 'react-hot-toast';
+import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { useAuth } from './contexts/AuthContext';
 
-const LeaveApplication = () => {
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  
-  const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [leaveBalances, setLeaveBalances] = useState({
-    casual: { total: 12, taken: 0, remaining: 12 },
-    sick: { total: 10, taken: 0, remaining: 10 },
-    earned: { total: 15, taken: 0, remaining: 15 }
-  });
+// Import Pages
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import LeaveApplication from './pages/LeaveApplication';
+import MyLeaves from './pages/MyLeaves';
+import LeaveApprovals from './pages/LeaveApprovals';
+import Users from './pages/Users';
+import Profile from './pages/Profile';
+import Layout from './components/Layout';
 
-  const [formData, setFormData] = useState({
-    leaveType: 'Casual',
-    startDate: '',
-    endDate: '',
-    reason: '',
-    isHalfDay: false,
-    halfDayType: 'first-half',
-    contactDuringLeave: user?.contactNumber || '',
-    numberOfDays: 1
-  });
+// Create theme
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#1976d2',
+      light: '#42a5f5',
+      dark: '#1565c0',
+    },
+    secondary: {
+      main: '#dc004e',
+      light: '#ff4081',
+      dark: '#9a0036',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  shape: {
+    borderRadius: 8,
+  },
+});
 
-  // Load user leave balances
-  useEffect(() => {
-    if (user) {
-      setLeaveBalances({
-        casual: user.casualLeaves || { total: 12, taken: 0, remaining: 12 },
-        sick: user.sickLeaves || { total: 10, taken: 0, remaining: 10 },
-        earned: user.earnedLeaves || { total: 15, taken: 0, remaining: 15 }
-      });
-    }
-  }, [user]);
+// Protected Route Component
+const ProtectedRoute = ({ children, roles = [] }) => {
+  const { user, loading } = useAuth();
 
-  const handleChange = (e) => {
-    const { name, value, checked } = e.target;
-    
-    const updatedFormData = {
-      ...formData,
-      [name]: name === 'isHalfDay' ? checked : value
-    };
-    
-    setFormData(updatedFormData);
-    
-    // Calculate days if dates are changed
-    if ((name === 'startDate' || name === 'endDate') && updatedFormData.startDate && updatedFormData.endDate) {
-      calculateDays(updatedFormData);
-    }
-  };
+  if (loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div>Loading...</div>
+    </div>;
+  }
 
-  const calculateDays = (formDataToCalculate = formData) => {
-    if (formDataToCalculate.startDate && formDataToCalculate.endDate) {
-      const start = new Date(formDataToCalculate.startDate);
-      const end = new Date(formDataToCalculate.endDate);
-      
-      if (start > end) {
-        setFormData({ ...formDataToCalculate, numberOfDays: 0 });
-        return;
-      }
-      
-      const diffTime = Math.abs(end - start);
-      let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
-      if (formDataToCalculate.isHalfDay) diffDays = 0.5;
-      
-      setFormData(prev => ({ ...prev, numberOfDays: diffDays }));
-    }
-  };
+  if (!user) {
+    return <Navigate to="/login" />;
+  }
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.startDate || !formData.endDate || !formData.reason) {
-      toast.error('Please fill all required fields');
-      return;
-    }
+  if (roles.length > 0 && !roles.includes(user.role)) {
+    return <Navigate to="/dashboard" />;
+  }
 
-    // Check leave balance
-    const selectedLeaveType = formData.leaveType.toLowerCase();
-    const availableLeaves = leaveBalances[selectedLeaveType]?.remaining || 0;
-    
-    if (formData.numberOfDays > availableLeaves) {
-      toast.error(`Insufficient ${formData.leaveType} leave balance. Available: ${availableLeaves} days`);
-      return;
-    }
-
-    setSubmitting(true);
-    
-    try {
-      const leaveData = {
-        ...formData,
-        startDate: new Date(formData.startDate).toISOString(),
-        endDate: new Date(formData.endDate).toISOString(),
-        numberOfDays: formData.numberOfDays
-      };
-
-      const response = await api.post('/leaves', leaveData);
-
-      if (response.data.success) {
-        toast.success('Leave application submitted successfully!');
-        navigate('/my-leaves');
-      } else {
-        toast.error(response.data.message || 'Failed to apply leave');
-      }
-    } catch (error) {
-      console.error('Apply leave error:', error);
-      toast.error(error.response?.data?.message || 'Failed to apply leave');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const getAvailableLeaves = () => {
-    switch (formData.leaveType) {
-      case 'Casual':
-        return leaveBalances.casual.remaining;
-      case 'Sick':
-        return leaveBalances.sick.remaining;
-      case 'Earned':
-        return leaveBalances.earned.remaining;
-      default:
-        return 0;
-    }
-  };
-
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0];
-  };
-
-  // Get min end date (should be start date or later)
-  const getMinEndDate = () => {
-    return formData.startDate || getTodayDate();
-  };
-
-  return (
-    <Container maxWidth="lg">
-      <Box sx={{ mt: 4, mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Apply Leave
-        </Typography>
-        
-        {/* Leave Balance Cards */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Casual Leave
-                </Typography>
-                <Typography variant="h5">
-                  {leaveBalances.casual.remaining} / {leaveBalances.casual.total} days
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Taken: {leaveBalances.casual.taken} days
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Sick Leave
-                </Typography>
-                <Typography variant="h5">
-                  {leaveBalances.sick.remaining} / {leaveBalances.sick.total} days
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Taken: {leaveBalances.sick.taken} days
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-          
-          <Grid item xs={12} md={4}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary" gutterBottom>
-                  Earned Leave
-                </Typography>
-                <Typography variant="h5">
-                  {leaveBalances.earned.remaining} / {leaveBalances.earned.total} days
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  Taken: {leaveBalances.earned.taken} days
-                </Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        </Grid>
-
-        {/* Leave Application Form */}
-        <Paper sx={{ p: 4 }}>
-          <Typography variant="h6" gutterBottom sx={{ mb: 3 }}>
-            Leave Application Form
-          </Typography>
-          
-          <form onSubmit={handleSubmit}>
-            <Grid container spacing={3}>
-              {/* Leave Type */}
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth>
-                  <InputLabel>Leave Type *</InputLabel>
-                  <Select
-                    name="leaveType"
-                    value={formData.leaveType}
-                    onChange={handleChange}
-                    label="Leave Type *"
-                  >
-                    <MenuItem value="Casual">Casual Leave</MenuItem>
-                    <MenuItem value="Sick">Sick Leave</MenuItem>
-                    <MenuItem value="Earned">Earned Leave</MenuItem>
-                  </Select>
-                </FormControl>
-                
-                <Alert severity="info" sx={{ mt: 2 }}>
-                  Available {formData.leaveType} Leave: <strong>{getAvailableLeaves()} days</strong>
-                </Alert>
-              </Grid>
-              
-              {/* Half Day Toggle */}
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.isHalfDay}
-                      onChange={handleChange}
-                      name="isHalfDay"
-                    />
-                  }
-                  label="Half Day Leave"
-                />
-                
-                {formData.isHalfDay && (
-                  <FormControl fullWidth sx={{ mt: 2 }}>
-                    <InputLabel>Half Day Type</InputLabel>
-                    <Select
-                      name="halfDayType"
-                      value={formData.halfDayType}
-                      onChange={handleChange}
-                      label="Half Day Type"
-                    >
-                      <MenuItem value="first-half">First Half</MenuItem>
-                      <MenuItem value="second-half">Second Half</MenuItem>
-                    </Select>
-                  </FormControl>
-                )}
-              </Grid>
-              
-              {/* Dates - Using Native Date Inputs */}
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Start Date *"
-                  type="date"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  inputProps={{
-                    min: getTodayDate()
-                  }}
-                  required
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="End Date *"
-                  type="date"
-                  name="endDate"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  inputProps={{
-                    min: getMinEndDate()
-                  }}
-                  required
-                />
-              </Grid>
-              
-              {/* Number of Days */}
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Number of Days"
-                  type="number"
-                  name="numberOfDays"
-                  value={formData.numberOfDays}
-                  onChange={handleChange}
-                  disabled={formData.isHalfDay}
-                  inputProps={{ 
-                    min: 0.5, 
-                    step: 0.5,
-                    readOnly: formData.isHalfDay
-                  }}
-                  helperText={formData.isHalfDay ? "Half day selected (0.5 days)" : "Calculated automatically based on dates"}
-                />
-              </Grid>
-              
-              {/* Contact During Leave */}
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Contact Number During Leave"
-                  name="contactDuringLeave"
-                  value={formData.contactDuringLeave}
-                  onChange={handleChange}
-                  placeholder="Emergency contact number"
-                />
-              </Grid>
-              
-              {/* Reason */}
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Reason for Leave *"
-                  name="reason"
-                  value={formData.reason}
-                  onChange={handleChange}
-                  multiline
-                  rows={4}
-                  placeholder="Please provide details about your leave request..."
-                  required
-                />
-              </Grid>
-              
-              {/* Days Summary */}
-              {formData.startDate && formData.endDate && (
-                <Grid item xs={12}>
-                  <Alert 
-                    severity={formData.numberOfDays <= getAvailableLeaves() ? "success" : "warning"}
-                    sx={{ mt: 2 }}
-                  >
-                    {formData.numberOfDays <= getAvailableLeaves() ? (
-                      <>✓ You have sufficient leave balance for {formData.numberOfDays} days</>
-                    ) : (
-                      <>⚠ You need {formData.numberOfDays - getAvailableLeaves()} more days of {formData.leaveType} leave</>
-                    )}
-                  </Alert>
-                </Grid>
-              )}
-              
-              {/* Buttons */}
-              <Grid item xs={12}>
-                <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
-                  <Button
-                    variant="outlined"
-                    onClick={() => navigate('/dashboard')}
-                    disabled={submitting}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    disabled={submitting || formData.numberOfDays > getAvailableLeaves()}
-                    startIcon={submitting && <CircularProgress size={20} />}
-                  >
-                    {submitting ? 'Submitting...' : 'Apply Leave'}
-                  </Button>
-                </Box>
-              </Grid>
-            </Grid>
-          </form>
-        </Paper>
-        
-        {/* Leave Policy Info */}
-        <Paper sx={{ p: 3, mt: 3, bgcolor: '#f5f5f5' }}>
-          <Typography variant="h6" gutterBottom>
-            Leave Policy Information
-          </Typography>
-          <Typography variant="body2" paragraph>
-            • <strong>Casual Leave:</strong> {leaveBalances.casual.total} days per year, can be taken for personal reasons.
-          </Typography>
-          <Typography variant="body2" paragraph>
-            • <strong>Sick Leave:</strong> {leaveBalances.sick.total} days per year, requires medical certificate for more than 2 days.
-          </Typography>
-          <Typography variant="body2" paragraph>
-            • <strong>Earned Leave:</strong> {leaveBalances.earned.total} days per year, accrued based on service period.
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Note: Leave applications require approval. Please apply at least 2 days in advance.
-          </Typography>
-        </Paper>
-      </Box>
-    </Container>
-  );
+  return children;
 };
 
-export default LeaveApplication;
+function App() {
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Toaster position="top-right" />
+      <Router>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/login" element={<Login />} />
+          
+          {/* Protected Routes with Layout */}
+          <Route path="/" element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }>
+            <Route index element={<Navigate to="/dashboard" />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="apply-leave" element={<LeaveApplication />} />
+            <Route path="my-leaves" element={<MyLeaves />} />
+            <Route path="approvals" element={
+              <ProtectedRoute roles={['admin', 'hr', 'manager']}>
+                <LeaveApprovals />
+              </ProtectedRoute>
+            } />
+            <Route path="users" element={
+              <ProtectedRoute roles={['admin', 'hr']}>
+                <Users />
+              </ProtectedRoute>
+            } />
+            <Route path="profile" element={<Profile />} />
+          </Route>
+          
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to="/dashboard" />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
+  );
+}
+
+export default App;

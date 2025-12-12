@@ -1,27 +1,60 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CssBaseline from '@mui/material/CssBaseline';
+import { useAuth } from './contexts/AuthContext';
 
-// Import components
-import Login from './pages/Auth/Login';
-import Register from './pages/Auth/Register';
-import EmployeeDashboard from './pages/Employee/Dashboard';
-import ApplyLeave from './pages/Employee/ApplyLeave';
-import LeaveHistory from './pages/Employee/LeaveHistory';
-import LeaveBalance from './pages/Employee/LeaveBalance';
-import ManagerDashboard from './pages/Manager/Dashboard';
-import TeamLeaves from './pages/Manager/TeamLeaves';
+// Import Pages
+import Login from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import LeaveApplication from './pages/LeaveApplication';
+import MyLeaves from './pages/MyLeaves';
+import LeaveApprovals from './pages/LeaveApprovals';
+import Users from './pages/Users';
+import Profile from './pages/Profile';
+import Layout from './components/Layout';
 
-// Create Protected Route component
+// Create theme
+const theme = createTheme({
+  palette: {
+    primary: {
+      main: '#1976d2',
+      light: '#42a5f5',
+      dark: '#1565c0',
+    },
+    secondary: {
+      main: '#dc004e',
+      light: '#ff4081',
+      dark: '#9a0036',
+    },
+    background: {
+      default: '#f5f5f5',
+      paper: '#ffffff',
+    },
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+  },
+  shape: {
+    borderRadius: 8,
+  },
+});
+
+// Protected Route Component
 const ProtectedRoute = ({ children, roles = [] }) => {
-  const token = localStorage.getItem('token');
-  const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const { user, loading } = useAuth();
 
-  if (!token) {
+  if (loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <div>Loading...</div>
+    </div>;
+  }
+
+  if (!user) {
     return <Navigate to="/login" />;
   }
 
-  // Check if user has required role
   if (roles.length > 0 && !roles.includes(user.role)) {
     return <Navigate to="/dashboard" />;
   }
@@ -31,60 +64,42 @@ const ProtectedRoute = ({ children, roles = [] }) => {
 
 function App() {
   return (
-    <Router>
-      <div className="App">
-        <Toaster position="top-right" />
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Toaster position="top-right" />
+      <Router>
         <Routes>
           {/* Public Routes */}
           <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
           
-          {/* Protected Routes - Employee */}
-          <Route path="/dashboard" element={
+          {/* Protected Routes with Layout */}
+          <Route path="/" element={
             <ProtectedRoute>
-              <EmployeeDashboard />
+              <Layout />
             </ProtectedRoute>
-          } />
+          }>
+            <Route index element={<Navigate to="/dashboard" />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="apply-leave" element={<LeaveApplication />} />
+            <Route path="my-leaves" element={<MyLeaves />} />
+            <Route path="approvals" element={
+              <ProtectedRoute roles={['admin', 'hr', 'manager']}>
+                <LeaveApprovals />
+              </ProtectedRoute>
+            } />
+            <Route path="users" element={
+              <ProtectedRoute roles={['admin', 'hr']}>
+                <Users />
+              </ProtectedRoute>
+            } />
+            <Route path="profile" element={<Profile />} />
+          </Route>
           
-          <Route path="/apply-leave" element={
-            <ProtectedRoute>
-              <ApplyLeave />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/leave-history" element={
-            <ProtectedRoute>
-              <LeaveHistory />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/leave-balance" element={
-            <ProtectedRoute>
-              <LeaveBalance />
-            </ProtectedRoute>
-          } />
-          
-          {/* Protected Routes - Manager */}
-          <Route path="/manager/dashboard" element={
-            <ProtectedRoute roles={['manager', 'admin']}>
-              <ManagerDashboard />
-            </ProtectedRoute>
-          } />
-          
-          <Route path="/manager/team-leaves" element={
-            <ProtectedRoute roles={['manager', 'admin']}>
-              <TeamLeaves />
-            </ProtectedRoute>
-          } />
-          
-          {/* Default route */}
-          <Route path="/" element={<Navigate to="/login" />} />
-          
-          {/* Fallback */}
-          <Route path="*" element={<Navigate to="/login" />} />
+          {/* Catch all route */}
+          <Route path="*" element={<Navigate to="/dashboard" />} />
         </Routes>
-      </div>
-    </Router>
+      </Router>
+    </ThemeProvider>
   );
 }
 

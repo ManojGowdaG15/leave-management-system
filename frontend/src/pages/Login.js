@@ -1,14 +1,31 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import './Login.css';
-
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
+import {
+  Container,
+  Paper,
+  TextField,
+  Button,
+  Typography,
+  Box,
+  Alert,
+  InputAdornment,
+  IconButton,
+} from '@mui/material';
+import {
+  Email as EmailIcon,
+  Lock as LockIcon,
+  Visibility,
+  VisibilityOff,
+} from '@mui/icons-material';
+import { useAuth } from '../contexts/AuthContext';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -16,108 +33,151 @@ const Login = () => {
     setError('');
     setLoading(true);
 
+    if (!email || !password) {
+      setError('Please fill in all fields');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
-      }
-
-      // Save token and user data
-      localStorage.setItem('token', data.token);
-      localStorage.setItem('user', JSON.stringify(data.user));
-
-      // Redirect based on role
-      if (data.user.role === 'manager') {
-        navigate('/manager-dashboard');
-      } else {
+      const result = await login(email, password);
+      if (result.success) {
         navigate('/dashboard');
+      } else {
+        setError(result.error || 'Login failed');
       }
     } catch (err) {
-      setError(err.message);
+      setError('Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }
   };
 
+  // Demo credentials for testing
+  const useDemoCredentials = (demoEmail, demoPassword) => {
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+  };
+
   return (
-    <div className="login-container">
-      <div className="login-card">
-        <div className="login-header">
-          <div className="logo">
-            <span role="img" aria-label="login">🔐</span>
-            <h1>Leave Management System</h1>
-          </div>
-          <p>Sign in to your account</p>
-        </div>
+    <Container component="main" maxWidth="xs">
+      <Box
+        sx={{
+          marginTop: 8,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+        }}
+      >
+        <Paper elevation={3} sx={{ p: 4, width: '100%' }}>
+          <Typography component="h1" variant="h4" align="center" gutterBottom>
+            Leave Management System
+          </Typography>
+          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
+            Sign in to your account
+          </Typography>
 
-        <form onSubmit={handleSubmit} className="login-form">
-          {error && <div className="error-message">{error}</div>}
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {error}
+            </Alert>
+          )}
 
-          <div className="input-group">
-            <label>
-              <span role="img" aria-label="email">📧</span>
-              Email Address
-            </label>
-            <input
+          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Email Address"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
-              required
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <EmailIcon color="action" />
+                  </InputAdornment>
+                ),
+              }}
             />
-          </div>
-
-          <div className="input-group">
-            <label>
-              <span role="img" aria-label="password">🔒</span>
-              Password
-            </label>
-            <input
-              type="password"
+            <TextField
+              margin="normal"
+              required
+              fullWidth
+              label="Password"
+              type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              required
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <LockIcon color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowPassword(!showPassword)}
+                      edge="end"
+                    >
+                      {showPassword ? <VisibilityOff /> : <Visibility />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
             />
-          </div>
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              size="large"
+              disabled={loading}
+              sx={{ mt: 3, mb: 2 }}
+            >
+              {loading ? 'Signing in...' : 'Sign In'}
+            </Button>
+          </Box>
 
-          <button type="submit" disabled={loading} className="login-button">
-            {loading ? 'Signing in...' : 'Sign In'}
-          </button>
+          <Divider sx={{ my: 3 }}>or try demo accounts</Divider>
 
-          <div className="test-credentials">
-            <h3>Test Credentials:</h3>
-            <div className="credentials">
-              <div>
-                <strong>Manager:</strong>
-                <p>📧 Email: manager@company.com</p>
-                <p>🔑 Password: manager123</p>
-              </div>
-              <div>
-                <strong>Employee:</strong>
-                <p>📧 Email: employee@company.com</p>
-                <p>🔑 Password: employee123</p>
-              </div>
-            </div>
-          </div>
-        </form>
-
-        <div className="login-footer">
-          <p>© 2025 Leave Management System</p>
-          <p>DataSturdy Consulting - Assignment</p>
-        </div>
-      </div>
-    </div>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => useDemoCredentials('admin@company.com', 'Admin@123')}
+            >
+              Admin (admin@company.com)
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => useDemoCredentials('hr@company.com', 'Hr@123')}
+            >
+              HR Manager (hr@company.com)
+            </Button>
+            <Button
+              variant="outlined"
+              size="small"
+              onClick={() => useDemoCredentials('eng.employee1@company.com', 'Employee@123')}
+            >
+              Employee (eng.employee1@company.com)
+            </Button>
+          </Box>
+        </Paper>
+      </Box>
+    </Container>
   );
 };
+
+// Add Divider component
+const Divider = ({ children, ...props }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', my: 2 }} {...props}>
+    <Box sx={{ flexGrow: 1, height: '1px', bgcolor: 'divider' }} />
+    <Typography variant="body2" sx={{ px: 2, color: 'text.secondary' }}>
+      {children}
+    </Typography>
+    <Box sx={{ flexGrow: 1, height: '1px', bgcolor: 'divider' }} />
+  </Box>
+);
 
 export default Login;

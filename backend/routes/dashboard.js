@@ -1,80 +1,150 @@
 const express = require('express');
 const router = express.Router();
-const jwt = require('jsonwebtoken');
-const LeaveApplication = require('../models/LeaveApplication');
-const LeaveBalance = require('../models/LeaveBalance');
+const auth = require('../middleware/auth');
 const User = require('../models/User');
+const Leave = require('../models/Leave');
 
-// Middleware to verify token
-const verifyToken = (req, res, next) => {
-    const token = req.headers.authorization?.split(' ')[1];
-    
-    if (!token) {
-        return res.status(401).json({ error: 'No token provided' });
-    }
-    
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.userId = decoded.userId;
-        req.userRole = decoded.role;
-        next();
-    } catch (error) {
-        return res.status(401).json({ error: 'Invalid token' });
-    }
-};
+// Get dashboard data
+router.get('/', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const userRole = req.user.role;
 
-// Employee dashboard data
-router.get('/employee', verifyToken, async (req, res) => {
-    try {
-        const [balance, applications] = await Promise.all([
-            LeaveBalance.findOne({ user: req.userId }),
-            LeaveApplication.find({ user: req.userId })
-                .sort({ appliedDate: -1 })
-                .limit(5)
-        ]);
-        
-        res.json({
-            leaveBalance: balance || {
-                casualLeaves: 12,
-                sickLeaves: 10,
-                earnedLeaves: 15
-            },
-            recentApplications: applications
-        });
-    } catch (error) {
-        console.error('Employee dashboard error:', error);
-        res.status(500).json({ error: 'Server error' });
+    // Get user details
+    const user = await User.findById(userId, '-password');
+    
+    let dashboardData = {
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        department: user.department,
+        employeeId: user.employeeId
+      }
+    };
+
+    // Get leave balance
+    const leaveBalance = {
+      casualLeaves: user.leaveBalance.casual,
+      sickLeaves: user.leaveBalance.sick,
+      earnedLeaves: user.leaveBalance.earned,
+      usedCasual: 12 - user.leaveBalance.casual,
+      usedSick: 10 - user.leaveBalance.sick,
+      usedEarned: 15 - user.leaveBalance.earned
+    };
+    
+    dashboardData.leaveBalance = leaveBalance;
+
+    // Get user's leaves
+    const userLeaves = await Leave.find({ userId })
+      .sort({ appliedDate: -1 })
+      .limit(5);
+    
+    dashboardData.recentLeaves = userLeaves;
+
+    // Calculate leave stats
+    const allLeaves = await Leave.find({ userId });
+    const leaveStats = {
+      total: allLeaves.length,
+      pending: allLeaves.filter(l => l.status === 'pending').length,
+      approved: allLeaves.filter(l => l.status === 'approved').length,
+      rejected: allLeaves.filter(l => l.status === 'rejected').length,
+      cancelled: allLeaves.filter(l => l.status === 'cancelled').length
+    };
+    
+    dashboardData.leaveStats = leaveStats;
+
+    // If user is manager, get team data
+    if (userRole === 'manager' || userRole === 'admin') {
+      // Get team members
+      const teamMembers = await User.find({ 
+        managerId: userId,
+        isActive: true 
+      }).countDocuments();
+      
+      dashboardData.teamMembers = teamMembers;
+
+      // Get pending leaves for approval
+      const teamUsers = await User.find({ managerId: userId });
+      const teamUserIds = teamUsers.map(member => member._id);
+      
+      const pendingLeaves = await Leave.find({
+        userId: { $in: teamUserIds },
+        status: 'pending'
+      })
+      .populate('userId', 'name email department')
+      .sort({ appliedDate: -1 })
+      .limit(10);
+      
+      dashboardData.pendingLeaves = pendingLeaves;
+
+      // Get team calendar
+      const teamLeaves = await Leave.find({
+        userId: { $in: teamUserIds },
+        status: 'approved'
+      })
+      .populate('userId', 'name')
+      .sort({ startDate: 1 })
+      .limit(10);
+      
+      dashboardData.leaveCalendar = teamLeaves;
     }
+
+    res.json(dashboardData);
+  } catch (error) {
+    console.error('Dashboard error:', error);
+    res.status(500).json({ error: 'Failed to load dashboard data' });
+  }
 });
 
-// Manager dashboard data
-router.get('/manager', verifyToken, async (req, res) => {
-    try {
-        if (req.userRole !== 'manager') {
-            return res.status(403).json({ error: 'Access denied' });
-        }
-        
-        const [pendingCount, users] = await Promise.all([
-            LeaveApplication.countDocuments({ status: 'pending' }),
-            User.find({ role: 'employee' })
-        ]);
-        
-        res.json({
-            stats: {
-                teamMembers: users.length,
-                pendingRequests: pendingCount,
-                approvedThisMonth: 0 // You can implement this
-            },
-            teamMembers: users.map(user => ({
-                id: user._id,
-                name: user.name,
-                email: user.email
-            }))
-        });
-    } catch (error) {
-        console.error('Manager dashboard error:', error);
-        res.status(500).json({ error: 'Server error' });
+// Get manager dashboard data
+router.get('/manager', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'manager' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied' });
     }
+
+    const userId = req.user.userId;
+
+    // Get team stats
+    const teamMembers = await User.find({ managerId: userId, isActive: true });
+    const teamMemberIds = teamMembers.map(member => member._id);
+
+    // Get all team leaves
+    const teamLeaves = await Leave.find({
+      userId: { $in: teamMemberIds }
+    })
+    .populate('userId', 'name department')
+    .sort({ appliedDate: -1 });
+
+    // Calculate stats
+    const stats = {
+      totalLeaves: teamLeaves.length,
+      pending: teamLeaves.filter(l => l.status === 'pending').length,
+      approved: teamLeaves.filter(l => l.status === 'approved').length,
+      rejected: teamLeaves.filter(l => l.status === 'rejected').length,
+      teamMembers: teamMembers.length
+    };
+
+    // Get recent approvals
+    const recentApprovals = teamLeaves
+      .filter(l => l.status === 'approved' || l.status === 'rejected')
+      .slice(0, 5);
+
+    res.json({
+      stats,
+      recentApprovals,
+      teamMembers: teamMembers.map(m => ({
+        id: m._id,
+        name: m.name,
+        email: m.email,
+        department: m.department
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

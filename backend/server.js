@@ -9,11 +9,11 @@ const app = express();
 
 // ==================== CORS CONFIGURATION ====================
 const allowedOrigins = [
-  'https://leave-management-system-zlf8-d040v27y3-manoj-gowda-gs-projects.vercel.app/', // Your frontend'
-  'https://leave-management-system-1-kv66.onrender.com',  // Your backend
+  'https://leave-management-system-zlf8.vercel.app',  // your real frontend
+  'https://leave-management-system-1-kv66.onrender.com', // your backend
   'http://localhost:3000',
   'http://localhost:5000',
-  'http://localhost:5173'  // Vite dev server
+  'http://localhost:5173'
 ];
 
 const corsOptions = {
@@ -23,25 +23,17 @@ const corsOptions = {
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log("❌ Blocked by CORS:", origin);
-      return callback(new Error("Not allowed by CORS"));
+      console.log('❌ Blocked by CORS:', origin);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  methods: ['GET','POST','PUT','DELETE','PATCH','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization']
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Handle preflight requests
 app.options('*', cors(corsOptions));
-// ==================== END CORS CONFIGURATION ====================
 
 // Other middleware
 app.use(express.json());

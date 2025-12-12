@@ -59,6 +59,17 @@ const Login = () => {
     setPassword(demoPassword);
   };
 
+  // Divider component
+  const Divider = ({ children, ...props }) => (
+    <Box sx={{ display: 'flex', alignItems: 'center', my: 2 }} {...props}>
+      <Box sx={{ flexGrow: 1, height: '1px', bgcolor: 'divider' }} />
+      <Typography variant="body2" sx={{ px: 2, color: 'text.secondary' }}>
+        {children}
+      </Typography>
+      <Box sx={{ flexGrow: 1, height: '1px', bgcolor: 'divider' }} />
+    </Box>
+  );
+
   return (
     <Container component="main" maxWidth="xs">
       <Box
@@ -138,7 +149,7 @@ const Login = () => {
             </Button>
           </Box>
 
-          <Divider sx={{ my: 3 }}>or try demo accounts</Divider>
+          <Divider>or try demo accounts</Divider>
 
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             <Button
@@ -168,16 +179,5 @@ const Login = () => {
     </Container>
   );
 };
-
-// Add Divider component
-const Divider = ({ children, ...props }) => (
-  <Box sx={{ display: 'flex', alignItems: 'center', my: 2 }} {...props}>
-    <Box sx={{ flexGrow: 1, height: '1px', bgcolor: 'divider' }} />
-    <Typography variant="body2" sx={{ px: 2, color: 'text.secondary' }}>
-      {children}
-    </Typography>
-    <Box sx={{ flexGrow: 1, height: '1px', bgcolor: 'divider' }} />
-  </Box>
-);
 
 export default Login;

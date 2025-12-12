@@ -9,7 +9,6 @@ import {
   Grid,
   Avatar,
   Alert,
-  Divider,
   Tab,
   Tabs,
   Card,
@@ -41,7 +40,6 @@ const Profile = () => {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
   const [editMode, setEditMode] = useState(false);
-  const [passwordMode, setPasswordMode] = useState(false);
 
   // Profile form
   const [profileForm, setProfileForm] = useState({
@@ -144,7 +142,6 @@ const Profile = () => {
           newPassword: '',
           confirmPassword: '',
         });
-        setPasswordMode(false);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || 'Failed to change password');

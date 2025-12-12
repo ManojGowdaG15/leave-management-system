@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Container,
   Paper,
@@ -19,9 +19,6 @@ import {
   Step,
   StepLabel,
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import {
   Event as EventIcon,
   Send as SendIcon,
@@ -44,8 +41,8 @@ const LeaveApplication = () => {
   // Form state
   const [formData, setFormData] = useState({
     leaveType: 'Casual',
-    startDate: new Date(),
-    endDate: new Date(),
+    startDate: '',
+    endDate: '',
     reason: '',
     isHalfDay: false,
     halfDayType: 'first-half',
@@ -115,8 +112,8 @@ const LeaveApplication = () => {
       
       const leaveData = {
         ...formData,
-        startDate: formData.startDate.toISOString(),
-        endDate: formData.endDate.toISOString(),
+        startDate: new Date(formData.startDate).toISOString(),
+        endDate: new Date(formData.endDate).toISOString(),
         numberOfDays: calculateDays(),
       };
 
@@ -148,242 +145,237 @@ const LeaveApplication = () => {
   };
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDateFns}>
-      <Container maxWidth="lg">
-        <Paper sx={{ p: 4 }}>
-          <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <EventIcon /> Apply for Leave
-          </Typography>
-          
-          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-            {steps.map((label) => (
-              <Step key={label}>
-                <StepLabel>{label}</StepLabel>
-              </Step>
-            ))}
-          </Stepper>
+    <Container maxWidth="lg">
+      <Paper sx={{ p: 4 }}>
+        <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <EventIcon /> Apply for Leave
+        </Typography>
+        
+        <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
 
-          {activeStep === 0 && (
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Leave Type</InputLabel>
-                  <Select
-                    value={formData.leaveType}
-                    onChange={handleChange('leaveType')}
-                    label="Leave Type"
-                    error={!!errors.leaveType}
-                  >
-                    <MenuItem value="Casual">Casual Leave</MenuItem>
-                    <MenuItem value="Sick">Sick Leave</MenuItem>
-                    <MenuItem value="Earned">Earned Leave</MenuItem>
-                    <MenuItem value="Maternity">Maternity Leave</MenuItem>
-                    <MenuItem value="Paternity">Paternity Leave</MenuItem>
-                    <MenuItem value="Bereavement">Bereavement Leave</MenuItem>
-                    <MenuItem value="Compensatory">Compensatory Off</MenuItem>
-                    <MenuItem value="Unpaid">Unpaid Leave</MenuItem>
-                  </Select>
-                  {errors.leaveType && (
-                    <Typography color="error" variant="caption">{errors.leaveType}</Typography>
-                  )}
-                  <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-                    {getLeaveTypeDescription(formData.leaveType)}
-                  </Typography>
-                </FormControl>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      checked={formData.isHalfDay}
-                      onChange={(e) => handleChange('isHalfDay')(e.target.checked)}
-                    />
-                  }
-                  label="Half Day Leave"
-                />
-                {formData.isHalfDay && (
-                  <FormControl fullWidth margin="normal">
-                    <InputLabel>Half Day Session</InputLabel>
-                    <Select
-                      value={formData.halfDayType}
-                      onChange={handleChange('halfDayType')}
-                      label="Half Day Session"
-                    >
-                      <MenuItem value="first-half">First Half (9 AM - 1 PM)</MenuItem>
-                      <MenuItem value="second-half">Second Half (1 PM - 6 PM)</MenuItem>
-                    </Select>
-                  </FormControl>
+        {activeStep === 0 && (
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Leave Type</InputLabel>
+                <Select
+                  value={formData.leaveType}
+                  onChange={handleChange('leaveType')}
+                  label="Leave Type"
+                  error={!!errors.leaveType}
+                >
+                  <MenuItem value="Casual">Casual Leave</MenuItem>
+                  <MenuItem value="Sick">Sick Leave</MenuItem>
+                  <MenuItem value="Earned">Earned Leave</MenuItem>
+                  <MenuItem value="Maternity">Maternity Leave</MenuItem>
+                  <MenuItem value="Paternity">Paternity Leave</MenuItem>
+                  <MenuItem value="Bereavement">Bereavement Leave</MenuItem>
+                  <MenuItem value="Compensatory">Compensatory Off</MenuItem>
+                  <MenuItem value="Unpaid">Unpaid Leave</MenuItem>
+                </Select>
+                {errors.leaveType && (
+                  <Typography color="error" variant="caption">{errors.leaveType}</Typography>
                 )}
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <DatePicker
-                  label="Start Date"
-                  value={formData.startDate}
-                  onChange={handleChange('startDate')}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      margin: 'normal',
-                      error: !!errors.startDate,
-                      helperText: errors.startDate,
-                    },
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <DatePicker
-                  label="End Date"
-                  value={formData.endDate}
-                  onChange={handleChange('endDate')}
-                  minDate={formData.startDate}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      margin: 'normal',
-                      error: !!errors.endDate,
-                      helperText: errors.endDate,
-                    },
-                  }}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={4}
-                  label="Reason for Leave"
-                  value={formData.reason}
-                  onChange={handleChange('reason')}
-                  margin="normal"
-                  error={!!errors.reason}
-                  helperText={errors.reason || 'Please provide a detailed reason for your leave'}
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  label="Contact During Leave"
-                  value={formData.contactDuringLeave}
-                  onChange={handleChange('contactDuringLeave')}
-                  margin="normal"
-                  placeholder="Phone number where you can be reached"
-                />
-              </Grid>
-
-              <Grid item xs={12}>
-                <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    <CalculateIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-                    Leave Summary
-                  </Typography>
-                  <Grid container spacing={2}>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Number of Days
-                      </Typography>
-                      <Typography variant="h6">
-                        {calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}
-                      </Typography>
-                    </Grid>
-                    <Grid item xs={6}>
-                      <Typography variant="body2" color="text.secondary">
-                        Leave Type
-                      </Typography>
-                      <Typography variant="h6">
-                        {formData.leaveType}
-                      </Typography>
-                    </Grid>
-                  </Grid>
-                </Box>
-              </Grid>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  {getLeaveTypeDescription(formData.leaveType)}
+                </Typography>
+              </FormControl>
             </Grid>
-          )}
 
-          {activeStep === 1 && (
-            <Box>
-              <Typography variant="h6" gutterBottom>
-                Review Your Leave Application
-              </Typography>
-              
-              <Paper sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
+            <Grid item xs={12} md={6}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={formData.isHalfDay}
+                    onChange={(e) => handleChange('isHalfDay')(e.target.checked)}
+                  />
+                }
+                label="Half Day Leave"
+              />
+              {formData.isHalfDay && (
+                <FormControl fullWidth margin="normal">
+                  <InputLabel>Half Day Session</InputLabel>
+                  <Select
+                    value={formData.halfDayType}
+                    onChange={handleChange('halfDayType')}
+                    label="Half Day Session"
+                  >
+                    <MenuItem value="first-half">First Half (9 AM - 1 PM)</MenuItem>
+                    <MenuItem value="second-half">Second Half (1 PM - 6 PM)</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Start Date"
+                type="date"
+                value={formData.startDate}
+                onChange={handleChange('startDate')}
+                margin="normal"
+                error={!!errors.startDate}
+                helperText={errors.startDate}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ max: formData.endDate || undefined }}
+              />
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="End Date"
+                type="date"
+                value={formData.endDate}
+                onChange={handleChange('endDate')}
+                margin="normal"
+                error={!!errors.endDate}
+                helperText={errors.endDate}
+                InputLabelProps={{ shrink: true }}
+                inputProps={{ min: formData.startDate || undefined }}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                multiline
+                rows={4}
+                label="Reason for Leave"
+                value={formData.reason}
+                onChange={handleChange('reason')}
+                margin="normal"
+                error={!!errors.reason}
+                helperText={errors.reason || 'Please provide a detailed reason for your leave'}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                label="Contact During Leave"
+                value={formData.contactDuringLeave}
+                onChange={handleChange('contactDuringLeave')}
+                margin="normal"
+                placeholder="Phone number where you can be reached"
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  <CalculateIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
+                  Leave Summary
+                </Typography>
                 <Grid container spacing={2}>
-                  <Grid item xs={6} md={3}>
-                    <Typography variant="body2" color="text.secondary">Leave Type</Typography>
-                    <Typography variant="body1">{formData.leaveType}</Typography>
-                  </Grid>
-                  <Grid item xs={6} md={3}>
-                    <Typography variant="body2" color="text.secondary">Start Date</Typography>
-                    <Typography variant="body1">
-                      {formData.startDate.toLocaleDateString()}
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Number of Days
                     </Typography>
-                  </Grid>
-                  <Grid item xs={6} md={3}>
-                    <Typography variant="body2" color="text.secondary">End Date</Typography>
-                    <Typography variant="body1">
-                      {formData.endDate.toLocaleDateString()}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={6} md={3}>
-                    <Typography variant="body2" color="text.secondary">Duration</Typography>
-                    <Typography variant="body1">
+                    <Typography variant="h6">
                       {calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}
-                      {formData.isHalfDay && ` (Half Day - ${formData.halfDayType})`}
                     </Typography>
                   </Grid>
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="text.secondary">Reason</Typography>
-                    <Typography variant="body1" sx={{ mt: 1 }}>{formData.reason}</Typography>
-                  </Grid>
-                  <Grid item xs={12}>
-                    <Typography variant="body2" color="text.secondary">Contact During Leave</Typography>
-                    <Typography variant="body1">{formData.contactDuringLeave}</Typography>
+                  <Grid item xs={6}>
+                    <Typography variant="body2" color="text.secondary">
+                      Leave Type
+                    </Typography>
+                    <Typography variant="h6">
+                      {formData.leaveType}
+                    </Typography>
                   </Grid>
                 </Grid>
-              </Paper>
+              </Box>
+            </Grid>
+          </Grid>
+        )}
 
-              <Alert severity="info" sx={{ mb: 3 }}>
-                Your leave application will be sent to your manager for approval. 
-                You can track the status in "My Leaves" section.
-              </Alert>
-            </Box>
-          )}
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
-            <Button
-              disabled={activeStep === 0}
-              onClick={handleBack}
-            >
-              Back
-            </Button>
+        {activeStep === 1 && (
+          <Box>
+            <Typography variant="h6" gutterBottom>
+              Review Your Leave Application
+            </Typography>
             
-            <Box>
-              {activeStep === steps.length - 1 ? (
-                <Button
-                  variant="contained"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  startIcon={loading ? <CircularProgress size={20} /> : <SendIcon />}
-                >
-                  {loading ? 'Submitting...' : 'Submit Application'}
-                </Button>
-              ) : (
-                <Button
-                  variant="contained"
-                  onClick={handleNext}
-                >
-                  Next
-                </Button>
-              )}
-            </Box>
+            <Paper sx={{ p: 3, mb: 3, bgcolor: 'grey.50' }}>
+              <Grid container spacing={2}>
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="text.secondary">Leave Type</Typography>
+                  <Typography variant="body1">{formData.leaveType}</Typography>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="text.secondary">Start Date</Typography>
+                  <Typography variant="body1">
+                    {new Date(formData.startDate).toLocaleDateString()}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="text.secondary">End Date</Typography>
+                  <Typography variant="body1">
+                    {new Date(formData.endDate).toLocaleDateString()}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6} md={3}>
+                  <Typography variant="body2" color="text.secondary">Duration</Typography>
+                  <Typography variant="body1">
+                    {calculateDays()} {calculateDays() === 1 ? 'day' : 'days'}
+                    {formData.isHalfDay && ` (Half Day - ${formData.halfDayType})`}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">Reason</Typography>
+                  <Typography variant="body1" sx={{ mt: 1 }}>{formData.reason}</Typography>
+                </Grid>
+                <Grid item xs={12}>
+                  <Typography variant="body2" color="text.secondary">Contact During Leave</Typography>
+                  <Typography variant="body1">{formData.contactDuringLeave}</Typography>
+                </Grid>
+              </Grid>
+            </Paper>
+
+            <Alert severity="info" sx={{ mb: 3 }}>
+              Your leave application will be sent to your manager for approval. 
+              You can track the status in "My Leaves" section.
+            </Alert>
           </Box>
-        </Paper>
-      </Container>
-    </LocalizationProvider>
+        )}
+
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 4 }}>
+          <Button
+            disabled={activeStep === 0}
+            onClick={handleBack}
+          >
+            Back
+          </Button>
+          
+          <Box>
+            {activeStep === steps.length - 1 ? (
+              <Button
+                variant="contained"
+                onClick={handleSubmit}
+                disabled={loading}
+                startIcon={loading ? <CircularProgress size={20} /> : <SendIcon />}
+              >
+                {loading ? 'Submitting...' : 'Submit Application'}
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={handleNext}
+              >
+                Next
+              </Button>
+            )}
+          </Box>
+        </Box>
+      </Paper>
+    </Container>
   );
 };
 

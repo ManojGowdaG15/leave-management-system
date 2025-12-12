@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Paper,
@@ -25,17 +25,14 @@ import {
   Select,
   MenuItem,
   Avatar,
-  Alert,
   Switch,
   FormControlLabel,
 } from '@mui/material';
 import {
   Edit as EditIcon,
   Visibility as VisibilityIcon,
-  Add as AddIcon,
   FilterList as FilterListIcon,
   Refresh as RefreshIcon,
-  Person as PersonIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
@@ -65,11 +62,7 @@ const Users = () => {
     isActive: true,
   });
 
-  useEffect(() => {
-    fetchUsers();
-  }, [filters]);
-
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       const response = await getAllUsers();
@@ -108,7 +101,11 @@ const Users = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentUser.role, filters]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [fetchUsers]);
 
   const handleFilterChange = (field) => (event) => {
     setFilters(prev => ({

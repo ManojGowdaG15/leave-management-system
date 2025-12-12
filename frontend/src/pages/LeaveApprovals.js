@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Container,
   Paper,
@@ -13,7 +13,6 @@ import {
   Chip,
   IconButton,
   Button,
-  TextField,
   FormControl,
   InputLabel,
   Select,
@@ -60,11 +59,7 @@ const LeaveApprovals = () => {
   const [comments, setComments] = useState('');
   const [tabValue, setTabValue] = useState(0);
 
-  useEffect(() => {
-    fetchLeaves();
-  }, [filters, tabValue]);
-
-  const fetchLeaves = async () => {
+  const fetchLeaves = useCallback(async () => {
     try {
       setLoading(true);
       const params = { ...filters };
@@ -84,7 +79,11 @@ const LeaveApprovals = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters, tabValue]);
+
+  useEffect(() => {
+    fetchLeaves();
+  }, [fetchLeaves]);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);
@@ -128,7 +127,6 @@ const LeaveApprovals = () => {
       setActionDialog(false);
       fetchLeaves();
       
-      // Refresh dashboard data if needed
     } catch (error) {
       toast.error(error.response?.data?.message || `Failed to ${actionType} leave`);
     }
@@ -503,5 +501,8 @@ const LeaveApprovals = () => {
     </Container>
   );
 };
+
+// Add missing TextField import
+import { TextField } from '@mui/material';
 
 export default LeaveApprovals;

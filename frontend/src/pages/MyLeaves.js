@@ -13,7 +13,6 @@ import {
   Chip,
   IconButton,
   Button,
-  TextField,
   FormControl,
   InputLabel,
   Select,
@@ -38,7 +37,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { getMyLeaves, cancelLeave, getLeaveById } from '../services/leaveService';
 
 const MyLeaves = () => {
-  const { user } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({

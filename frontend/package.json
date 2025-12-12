@@ -16,11 +16,12 @@
     "react-scripts": "5.0.1"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "start": "node server.js",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "render-start": "PORT=3000 HOST=0.0.0.0 react-scripts start",
     "prod": "serve -s build -l 3000",
+    "dev": "react-scripts start",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

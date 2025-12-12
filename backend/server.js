@@ -9,7 +9,7 @@ const app = express();
 
 // ==================== CORS CONFIGURATION ====================
 const allowedOrigins = [
-  'https://leave-management-system-4-8l74.onrender.com', // Your frontend
+  'https://leave-management-system-zlf8-d040v27y3-manoj-gowda-gs-projects.vercel.app/', // Your frontend'
   'https://leave-management-system-1-kv66.onrender.com',  // Your backend
   'http://localhost:3000',
   'http://localhost:5000',

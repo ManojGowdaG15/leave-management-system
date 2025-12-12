@@ -1,124 +1,57 @@
+require('dotenv').config();
 const express = require('express');
+const mongoose = require('mongoose');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const leaveRoutes = require('./routes/leave');
+const expenseRoutes = require('./routes/expense');
+const dashboardRoutes = require('./routes/dashboard');
+
 const app = express();
 
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100 // limit each IP to 100 requests per windowMs
+});
+
+// Middleware
 app.use(cors());
 app.use(express.json());
+app.use(limiter);
 
-// In-memory storage
-const users = [
-    { id: 1, email: 'manager@test.com', password: 'manager123', name: 'Manager', role: 'manager' },
-    { id: 2, email: 'employee@test.com', password: 'employee123', name: 'Employee', role: 'employee' }
-];
+// Database connection
+mongoose.connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+})
+.then(() => console.log('MongoDB connected successfully'))
+.catch(err => console.log('MongoDB connection error:', err));
 
-let leaves = [];
-let tokenCounter = 1;
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/leave', leaveRoutes);
+app.use('/api/expense', expenseRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
-// Login
-app.post('/api/auth/login', (req, res) => {
-    const { email, password } = req.body;
-    const user = users.find(u => u.email === email && u.password === password);
-    
-    if (user) {
-        const token = `token_${user.id}_${tokenCounter++}`;
-        res.json({
-            success: true,
-            token: token,
-            user: { id: user.id, email: user.email, name: user.name, role: user.role }
-        });
-    } else {
-        res.status(401).json({ success: false, error: 'Invalid credentials' });
-    }
-});
-
-// Apply leave
-app.post('/api/leaves', (req, res) => {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ 
-            success: false, 
-            error: 'No token. Please login first.' 
-        });
-    }
-    
-    const token = authHeader.split(' ')[1];
-    const userId = token.split('_')[1]; // Extract user ID from token
-    
-    const user = users.find(u => u.id == userId);
-    
-    if (!user) {
-        return res.status(401).json({ 
-            success: false, 
-            error: 'Invalid token' 
-        });
-    }
-    
-    const leave = {
-        id: leaves.length + 1,
-        employeeId: user.id,
-        employeeName: user.name,
-        ...req.body,
-        status: 'pending',
-        appliedDate: new Date().toISOString()
-    };
-    
-    leaves.push(leave);
-    
-    res.json({ 
-        success: true, 
-        message: 'Leave applied successfully!', 
-        data: leave 
-    });
-});
-
-// Get leaves
-app.get('/api/leaves', (req, res) => {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ 
-            success: false, 
-            error: 'No token' 
-        });
-    }
-    
-    const token = authHeader.split(' ')[1];
-    const userId = token.split('_')[1];
-    
-    const userLeaves = leaves.filter(l => l.employeeId == userId);
-    
-    res.json({ 
-        success: true, 
-        count: userLeaves.length, 
-        data: userLeaves 
-    });
-});
-
-// Home
+// Root route
 app.get('/', (req, res) => {
-    res.json({ 
-        message: 'Leave Management API (Memory DB)',
-        status: 'working',
-        endpoints: [
-            'POST /api/auth/login',
-            'POST /api/leaves',
-            'GET /api/leaves'
-        ]
+    res.json({
+        message: 'Leave Management System API',
+        version: '1.0.0',
+        endpoints: {
+            auth: '/api/auth',
+            leave: '/api/leave',
+            expense: '/api/expense',
+            dashboard: '/api/dashboard'
+        }
     });
 });
 
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-    console.log(`
-    🎉 BACKEND RUNNING!
-    ===================
-    ✅ Server: http://localhost:${PORT}
-    ✅ No MongoDB needed
-    ✅ Test login works
-    
-    🔑 Test Credentials:
-       • manager@test.com / manager123
-       • employee@test.com / employee123
-    `);
+    console.log(`Server running on port ${PORT}`);
 });

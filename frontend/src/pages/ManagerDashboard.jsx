@@ -1,277 +1,369 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Users, CheckCircle, Clock, AlertCircle, TrendingUp, Calendar } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import Header from '../components/common/Header';
-import Sidebar from '../components/common/Sidebar';
-import StatsCard from '../components/common/StatsCard';
-import PendingApprovals from '../components/manager/PendingApprovals';
-import TeamCalendar from '../components/manager/TeamCalendar';
-import TeamOverview from '../components/manager/TeamOverview';
-import { managerAPI } from '../services/api';
-import { toast } from 'react-hot-toast';
-import Loader from '../components/common/Loader';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { leaveAPI } from '../services/api';
+import { 
+    Calendar, 
+    Users, 
+    LogOut, 
+    CheckCircle,
+    XCircle,
+    Clock,
+    AlertCircle,
+    BarChart3
+} from 'lucide-react';
 
 const ManagerDashboard = () => {
-  const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [pendingLeaves, setPendingLeaves] = useState([]);
-  const [teamStats, setTeamStats] = useState({
-    totalEmployees: 0,
-    onLeaveToday: 0,
-    pendingApprovals: 0,
-    approvalRate: '0%',
-  });
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const [teamRequests, setTeamRequests] = useState([]);
+    const [teamCalendar, setTeamCalendar] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-  const fetchDashboardData = async () => {
-    try {
-      const [pendingRes, overviewRes] = await Promise.all([
-        managerAPI.getPendingLeaves(),
-        managerAPI.getTeamOverview(),
-      ]);
-      
-      setPendingLeaves(pendingRes.data.data);
-      setDashboardData(overviewRes.data.data);
-      
-      // Calculate team stats
-      const stats = {
-        totalEmployees: overviewRes.data.data.employees?.length || 0,
-        onLeaveToday: Math.floor(Math.random() * 5), // Placeholder - would come from API
-        pendingApprovals: pendingRes.data.count || 0,
-        approvalRate: '92%', // Placeholder
-      };
-      setTeamStats(stats);
-    } catch (error) {
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+
+    useEffect(() => {
+        fetchManagerData();
+    }, []);
+
+    const fetchManagerData = async () => {
+        try {
+            const [requestsResponse, calendarResponse] = await Promise.all([
+                leaveAPI.getTeamRequests(),
+                leaveAPI.getTeamCalendar()
+            ]);
+            
+            setTeamRequests(requestsResponse.data);
+            setTeamCalendar(calendarResponse.data);
+        } catch (error) {
+            toast.error('Failed to fetch manager data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+        toast.success('Logged out successfully');
+    };
+
+    const handleApproveReject = async (id, status, comments = '') => {
+        try {
+            await leaveAPI.approveLeave(id, { status, comments });
+            toast.success(`Leave application ${status} successfully`);
+            fetchManagerData();
+        } catch (error) {
+            toast.error(error.response?.data?.error || 'Operation failed');
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading dashboard...</p>
+                </div>
+            </div>
+        );
     }
-  };
 
-  const getPageTitle = () => {
-    const path = location.pathname;
-    if (path.includes('/pending-approvals')) return 'Pending Approvals';
-    if (path.includes('/team-calendar')) return 'Team Calendar';
-    if (path.includes('/team-overview')) return 'Team Overview';
-    if (path.includes('/expenses')) return 'Expense Claims';
-    return 'Dashboard';
-  };
+    return (
+        <div className="min-h-screen bg-gray-50">
+            {/* Sidebar */}
+            <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg">
+                <div className="flex flex-col h-full">
+                    {/* Logo */}
+                    <div className="flex items-center justify-center h-16 px-4 border-b">
+                        <Calendar className="h-8 w-8 text-blue-600" />
+                        <span className="ml-2 text-xl font-bold text-gray-900">
+                            LeaveManage Pro
+                        </span>
+                    </div>
 
-  const getPageDescription = () => {
-    const path = location.pathname;
-    if (path.includes('/pending-approvals')) return 'Review and manage leave requests';
-    if (path.includes('/team-calendar')) return 'View team schedule and time off';
-    if (path.includes('/team-overview')) return 'Monitor team performance and analytics';
-    if (path.includes('/expenses')) return 'Manage expense claims and approvals';
-    return 'Overview of team leave management';
-  };
+                    {/* User info */}
+                    <div className="px-4 py-6 border-b">
+                        <div className="flex items-center">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span className="text-blue-600 font-semibold">
+                                    {user.name?.charAt(0) || 'M'}
+                                </span>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-900">
+                                    {user.name || 'Manager'}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                    {user.email || 'manager@company.com'}
+                                </p>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mt-1">
+                                    {user.role || 'Manager'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
-  if (loading && location.pathname === '/manager') {
-    return <Loader fullScreen />;
-  }
+                    {/* Navigation */}
+                    <nav className="flex-1 px-2 py-4 space-y-1">
+                        <button
+                            onClick={() => setActiveTab('dashboard')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'dashboard'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <BarChart3 className="mr-3 h-5 w-5" />
+                            Dashboard
+                        </button>
+                        
+                        <button
+                            onClick={() => setActiveTab('pending-approvals')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'pending-approvals'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Clock className="mr-3 h-5 w-5" />
+                            Pending Approvals
+                            {teamRequests.length > 0 && (
+                                <span className="ml-auto bg-red-100 text-red-800 text-xs font-medium px-2 py-0.5 rounded-full">
+                                    {teamRequests.length}
+                                </span>
+                            )}
+                        </button>
+                        
+                        <button
+                            onClick={() => setActiveTab('team-calendar')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'team-calendar'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Calendar className="mr-3 h-5 w-5" />
+                            Team Calendar
+                        </button>
+                        
+                        <button
+                            onClick={() => setActiveTab('team-members')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'team-members'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Users className="mr-3 h-5 w-5" />
+                            Team Members
+                        </button>
+                    </nav>
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-      <Sidebar isOpen={sidebarOpen} />
-      
-      <div className="lg:pl-64">
-        <main className="py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Page Header */}
-            <div className="mb-8">
-              <h1 className="text-2xl font-bold text-gray-900">{getPageTitle()}</h1>
-              <p className="text-gray-600">{getPageDescription()}</p>
+                    {/* Logout button */}
+                    <div className="p-4 border-t">
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md w-full"
+                        >
+                            <LogOut className="mr-3 h-5 w-5" />
+                            Logout
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <Routes>
-              <Route path="/" element={
-                <>
-                  {/* Stats Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <StatsCard
-                      title="Team Members"
-                      value={teamStats.totalEmployees}
-                      icon={Users}
-                      color="blue"
-                      trend={{ direction: 'up', value: 12 }}
-                    />
-                    <StatsCard
-                      title="On Leave Today"
-                      value={teamStats.onLeaveToday}
-                      icon={Calendar}
-                      color="yellow"
-                      subtitle="Out of office"
-                    />
-                    <StatsCard
-                      title="Pending Approvals"
-                      value={teamStats.pendingApprovals}
-                      icon={Clock}
-                      color="red"
-                      trend={{ direction: 'down', value: 8 }}
-                    />
-                    <StatsCard
-                      title="Approval Rate"
-                      value={teamStats.approvalRate}
-                      icon={CheckCircle}
-                      color="green"
-                      subtitle="This month"
-                    />
-                  </div>
-
-                  {/* Quick Stats and Actions */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                    {/* Pending Approvals Summary */}
-                    <div className="card">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Pending Approvals</h3>
-                        <button
-                          onClick={() => window.location.href = '/manager/pending-approvals'}
-                          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                        >
-                          View All →
-                        </button>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        {pendingLeaves.slice(0, 3).map((leave) => (
-                          <div key={leave._id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                            <div className="flex items-center">
-                              <div className="w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center mr-3">
-                                <Clock className="h-5 w-5 text-yellow-600" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900">{leave.userId?.name}</p>
-                                <p className="text-sm text-gray-600 capitalize">{leave.leaveType} Leave</p>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm text-gray-600">{leave.daysCount} days</p>
-                              <span className="badge-warning">Pending</span>
-                            </div>
-                          </div>
-                        ))}
-                        
-                        {pendingLeaves.length === 0 && (
-                          <div className="text-center py-4">
-                            <CheckCircle className="h-8 w-8 text-green-400 mx-auto mb-2" />
-                            <p className="text-gray-600">All caught up!</p>
-                          </div>
-                        )}
-                      </div>
+            {/* Main content */}
+            <div className="pl-64">
+                {/* Header */}
+                <header className="bg-white shadow-sm">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                        <h1 className="text-2xl font-semibold text-gray-900">
+                            {activeTab === 'dashboard' && 'Manager Dashboard'}
+                            {activeTab === 'pending-approvals' && 'Pending Approvals'}
+                            {activeTab === 'team-calendar' && 'Team Calendar'}
+                            {activeTab === 'team-members' && 'Team Members'}
+                        </h1>
                     </div>
+                </header>
 
-                    {/* Team Calendar Preview */}
-                    <div className="card">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-lg font-medium text-gray-900">Upcoming Time Off</h3>
-                        <button
-                          onClick={() => window.location.href = '/manager/team-calendar'}
-                          className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                        >
-                          View Calendar →
-                        </button>
-                      </div>
-                      
-                      <div className="space-y-3">
-                        {dashboardData?.leaves
-                          ?.filter(leave => new Date(leave.startDate) >= new Date())
-                          .slice(0, 3)
-                          .map((leave, index) => (
-                            <div key={index} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                              <div className="flex items-center">
-                                <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
-                                  <Calendar className="h-5 w-5 text-blue-600" />
-                                </div>
-                                <div>
-                                  <p className="font-medium text-gray-900">{leave.employee}</p>
-                                  <p className="text-sm text-gray-600 capitalize">{leave.type} Leave</p>
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <p className="text-sm text-gray-600">
-                                  {new Date(leave.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {activeTab === 'dashboard' && (
+                        <div className="space-y-6">
+                            {/* Welcome card */}
+                            <div className="bg-gradient-to-r from-purple-500 to-purple-600 rounded-lg shadow-lg p-6 text-white">
+                                <h2 className="text-2xl font-bold mb-2">
+                                    Welcome, Manager {user.name}!
+                                </h2>
+                                <p className="text-purple-100">
+                                    Manage your team's leaves and approvals from one dashboard.
                                 </p>
-                                <span className="badge-success">Approved</span>
-                              </div>
                             </div>
-                          ))}
-                        
-                        {(!dashboardData?.leaves || dashboardData.leaves.length === 0) && (
-                          <div className="text-center py-4">
-                            <AlertCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-                            <p className="text-gray-600">No upcoming leaves</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
 
-                    {/* Quick Actions */}
-                    <div className="card">
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-                      <div className="space-y-3">
-                        <button
-                          onClick={() => window.location.href = '/manager/pending-approvals'}
-                          className="w-full flex items-center justify-center btn-primary py-3"
-                        >
-                          <CheckCircle className="h-5 w-5 mr-2" />
-                          Review Approvals
-                        </button>
-                        <button
-                          onClick={() => window.location.href = '/manager/team-calendar'}
-                          className="w-full flex items-center justify-center btn-secondary py-3"
-                        >
-                          <Calendar className="h-5 w-5 mr-2" />
-                          View Team Calendar
-                        </button>
-                        <button
-                          onClick={() => window.location.href = '/manager/team-overview'}
-                          className="w-full flex items-center justify-center btn-secondary py-3"
-                        >
-                          <TrendingUp className="h-5 w-5 mr-2" />
-                          Team Analytics
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                            {/* Stats cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">
+                                                Pending Approvals
+                                            </p>
+                                            <p className="text-3xl font-bold text-gray-900 mt-2">
+                                                {teamRequests.length}
+                                            </p>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-full bg-yellow-100 flex items-center justify-center">
+                                            <Clock className="h-6 w-6 text-yellow-600" />
+                                        </div>
+                                    </div>
+                                </div>
 
-                  {/* Team Performance */}
-                  <div className="card">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Team Performance</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-primary-600 mb-2">24</div>
-                        <p className="text-sm text-gray-600">Leaves Approved This Month</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-green-600 mb-2">92%</div>
-                        <p className="text-sm text-gray-600">Approval Rate</p>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-blue-600 mb-2">3.2</div>
-                        <p className="text-sm text-gray-600">Avg Processing Time (Days)</p>
-                      </div>
-                    </div>
-                  </div>
-                </>
-              } />
-              
-              <Route path="/pending-approvals" element={<PendingApprovals />} />
-              <Route path="/team-calendar" element={<TeamCalendar />} />
-              <Route path="/team-overview" element={<TeamOverview />} />
-              
-              <Route path="*" element={<Navigate to="/manager" replace />} />
-            </Routes>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">
+                                                Approved This Month
+                                            </p>
+                                            <p className="text-3xl font-bold text-gray-900 mt-2">
+                                                8
+                                            </p>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <CheckCircle className="h-6 w-6 text-green-600" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">
+                                                Team Members
+                                            </p>
+                                            <p className="text-3xl font-bold text-gray-900 mt-2">
+                                                12
+                                            </p>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                                            <Users className="h-6 w-6 text-blue-600" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Pending approvals preview */}
+                            <div className="bg-white rounded-lg shadow">
+                                <div className="px-6 py-4 border-b flex justify-between items-center">
+                                    <h3 className="text-lg font-medium text-gray-900">
+                                        Recent Pending Requests
+                                    </h3>
+                                    <button
+                                        onClick={() => setActiveTab('pending-approvals')}
+                                        className="text-sm text-blue-600 hover:text-blue-800"
+                                    >
+                                        View All →
+                                    </button>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Employee
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Dates
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Type
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Reason
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {teamRequests.slice(0, 3).map((request) => (
+                                                <tr key={request._id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex items-center">
+                                                            <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                                                <span className="text-blue-600 text-sm font-medium">
+                                                                    {request.user?.name?.charAt(0) || 'E'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="ml-3">
+                                                                <p className="text-sm font-medium text-gray-900">
+                                                                    {request.user?.name || 'Employee'}
+                                                                </p>
+                                                                <p className="text-xs text-gray-500">
+                                                                    {request.user?.email}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {new Date(request.startDate).toLocaleDateString()} -{' '}
+                                                        {new Date(request.endDate).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                                                        {request.leaveType}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                                        {request.reason}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                        <div className="flex space-x-2">
+                                                            <button
+                                                                onClick={() => handleApproveReject(request._id, 'approved', 'Approved by manager')}
+                                                                className="text-green-600 hover:text-green-900"
+                                                            >
+                                                                <CheckCircle className="h-5 w-5" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleApproveReject(request._id, 'rejected', 'Please provide more details')}
+                                                                className="text-red-600 hover:text-red-900"
+                                                            >
+                                                                <XCircle className="h-5 w-5" />
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {teamRequests.length === 0 && (
+                                        <div className="text-center py-8 text-gray-500">
+                                            No pending approvals
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'pending-approvals' && (
+                        <PendingApprovals 
+                            requests={teamRequests}
+                            onAction={fetchManagerData}
+                        />
+                    )}
+
+                    {activeTab === 'team-calendar' && (
+                        <TeamCalendar calendar={teamCalendar} />
+                    )}
+
+                    {activeTab === 'team-members' && (
+                        <TeamMembers />
+                    )}
+                </main>
+            </div>
+        </div>
+    );
 };
 
 export default ManagerDashboard;

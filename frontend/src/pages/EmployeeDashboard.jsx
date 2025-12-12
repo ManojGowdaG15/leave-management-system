@@ -1,218 +1,352 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { Calendar, TrendingUp, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import Header from '../components/common/Header';
-import Sidebar from '../components/common/Sidebar';
-import StatsCard from '../components/common/StatsCard';
-import LeaveCard from '../components/common/LeaveCard';
-import ApplyLeave from '../components/employee/ApplyLeave';
-import LeaveHistory from '../components/employee/LeaveHistory';
-import LeaveBalance from '../components/employee/LeaveBalance';
-import { employeeAPI, leaveAPI } from '../services/api';
-import { toast } from 'react-hot-toast';
-import Loader from '../components/common/Loader';
+import { Link, useNavigate } from 'react-router-dom';
+import { toast } from 'react-toastify';
+import { leaveAPI } from '../services/api';
+import { 
+    Calendar, 
+    FileText, 
+    LogOut, 
+    PlusCircle,
+    Clock,
+    CheckCircle,
+    XCircle,
+    AlertCircle
+} from 'lucide-react';
 
 const EmployeeDashboard = () => {
-  const location = useLocation();
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [dashboardData, setDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [recentLeaves, setRecentLeaves] = useState([]);
+    const navigate = useNavigate();
+    const [activeTab, setActiveTab] = useState('dashboard');
+    const [leaveBalance, setLeaveBalance] = useState(null);
+    const [leaveApplications, setLeaveApplications] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, []);
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  const fetchDashboardData = async () => {
-    try {
-      const [dashboardRes, leavesRes] = await Promise.all([
-        employeeAPI.getDashboard(),
-        leaveAPI.getLeaveHistory(),
-      ]);
-      
-      setDashboardData(dashboardRes.data.data);
-      setRecentLeaves(leavesRes.data.data.slice(0, 3));
-    } catch (error) {
-      toast.error('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
+    useEffect(() => {
+        fetchDashboardData();
+    }, []);
+
+    const fetchDashboardData = async () => {
+        try {
+            const [balanceResponse, applicationsResponse] = await Promise.all([
+                leaveAPI.getLeaveBalance(),
+                leaveAPI.getMyApplications()
+            ]);
+            
+            setLeaveBalance(balanceResponse.data);
+            setLeaveApplications(applicationsResponse.data);
+        } catch (error) {
+            toast.error('Failed to fetch dashboard data');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        navigate('/login');
+        toast.success('Logged out successfully');
+    };
+
+    const getStatusIcon = (status) => {
+        switch (status) {
+            case 'approved': return <CheckCircle className="h-5 w-5 text-green-500" />;
+            case 'rejected': return <XCircle className="h-5 w-5 text-red-500" />;
+            case 'pending': return <Clock className="h-5 w-5 text-yellow-500" />;
+            case 'cancelled': return <AlertCircle className="h-5 w-5 text-gray-500" />;
+            default: return <Clock className="h-5 w-5 text-yellow-500" />;
+        }
+    };
+
+    const getStatusColor = (status) => {
+        switch (status) {
+            case 'approved': return 'bg-green-100 text-green-800';
+            case 'rejected': return 'bg-red-100 text-red-800';
+            case 'pending': return 'bg-yellow-100 text-yellow-800';
+            case 'cancelled': return 'bg-gray-100 text-gray-800';
+            default: return 'bg-yellow-100 text-yellow-800';
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">Loading dashboard...</p>
+                </div>
+            </div>
+        );
     }
-  };
-  
-  const getPageTitle = () => {
-    const path = location.pathname;
-    if (path.includes('/apply-leave')) return 'Apply Leave';
-    if (path.includes('/leave-history')) return 'Leave History';
-    if (path.includes('/leave-balance')) return 'Leave Balance';
-    return 'Dashboard';
-  };
 
-  const getPageDescription = () => {
-    const path = location.pathname;
-    if (path.includes('/apply-leave')) return 'Submit a new leave request';
-    if (path.includes('/leave-history')) return 'View and manage your leave applications';
-    if (path.includes('/leave-balance')) return 'Track your available leave balance';
-    return 'Overview of your leave management';
-  };
+    return (
+        <div className="min-h-screen bg-gray-50">
+            {/* Sidebar */}
+            <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg">
+                <div className="flex flex-col h-full">
+                    {/* Logo */}
+                    <div className="flex items-center justify-center h-16 px-4 border-b">
+                        <Calendar className="h-8 w-8 text-blue-600" />
+                        <span className="ml-2 text-xl font-bold text-gray-900">
+                            LeaveManage Pro
+                        </span>
+                    </div>
 
-  if (loading && location.pathname === '/employee') {
-    return <Loader fullScreen />;
-  }
+                    {/* User info */}
+                    <div className="px-4 py-6 border-b">
+                        <div className="flex items-center">
+                            <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span className="text-blue-600 font-semibold">
+                                    {user.name?.charAt(0) || 'E'}
+                                </span>
+                            </div>
+                            <div className="ml-3">
+                                <p className="text-sm font-medium text-gray-900">
+                                    {user.name || 'Employee'}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                    {user.email || 'employee@company.com'}
+                                </p>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mt-1">
+                                    {user.role || 'Employee'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Header sidebarOpen={sidebarOpen} setSidebarOpen={setSidebarOpen} />
-      <Sidebar isOpen={sidebarOpen} />
-      
-      <div className="lg:pl-64">
-        <main className="py-6">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            {/* Page Header */}
-            <div className="mb-8">
-              <h1 className="text-2xl font-bold text-gray-900">{getPageTitle()}</h1>
-              <p className="text-gray-600">{getPageDescription()}</p>
+                    {/* Navigation */}
+                    <nav className="flex-1 px-2 py-4 space-y-1">
+                        <button
+                            onClick={() => setActiveTab('dashboard')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'dashboard'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <Calendar className="mr-3 h-5 w-5" />
+                            Dashboard
+                        </button>
+                        
+                        <button
+                            onClick={() => setActiveTab('apply-leave')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'apply-leave'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <PlusCircle className="mr-3 h-5 w-5" />
+                            Apply Leave
+                        </button>
+                        
+                        <button
+                            onClick={() => setActiveTab('leave-history')}
+                            className={`flex items-center px-3 py-2 text-sm font-medium rounded-md w-full ${
+                                activeTab === 'leave-history'
+                                    ? 'bg-blue-100 text-blue-700'
+                                    : 'text-gray-700 hover:bg-gray-100'
+                            }`}
+                        >
+                            <FileText className="mr-3 h-5 w-5" />
+                            Leave History
+                        </button>
+                    </nav>
+
+                    {/* Logout button */}
+                    <div className="p-4 border-t">
+                        <button
+                            onClick={handleLogout}
+                            className="flex items-center px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 rounded-md w-full"
+                        >
+                            <LogOut className="mr-3 h-5 w-5" />
+                            Logout
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <Routes>
-              <Route path="/" element={
-                <>
-                  {/* Stats Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                    <StatsCard
-                      title="Casual Leave"
-                      value={dashboardData?.user?.leaveBalance?.casual || 0}
-                      icon={Calendar}
-                      color="blue"
-                      subtitle="Available days"
-                    />
-                    <StatsCard
-                      title="Sick Leave"
-                      value={dashboardData?.user?.leaveBalance?.sick || 0}
-                      icon={TrendingUp}
-                      color="red"
-                      subtitle="Available days"
-                    />
-                    <StatsCard
-                      title="Earned Leave"
-                      value={dashboardData?.user?.leaveBalance?.earned || 0}
-                      icon={CheckCircle}
-                      color="green"
-                      subtitle="Available days"
-                    />
-                    <StatsCard
-                      title="Pending Approvals"
-                      value={dashboardData?.stats?.pendingLeaves || 0}
-                      icon={Clock}
-                      color="yellow"
-                      subtitle="Awaiting approval"
-                    />
-                  </div>
-
-                  {/* Quick Actions */}
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-                    <div className="card">
-                      <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-                      <div className="space-y-3">
-                        <button
-                          onClick={() => window.location.href = '/employee/apply-leave'}
-                          className="w-full flex items-center justify-center btn-primary py-3"
-                        >
-                          <Calendar className="h-5 w-5 mr-2" />
-                          Apply for Leave
-                        </button>
-                        <button
-                          onClick={() => window.location.href = '/employee/leave-balance'}
-                          className="w-full flex items-center justify-center btn-secondary py-3"
-                        >
-                          <TrendingUp className="h-5 w-5 mr-2" />
-                          Check Leave Balance
-                        </button>
-                      </div>
+            {/* Main content */}
+            <div className="pl-64">
+                {/* Header */}
+                <header className="bg-white shadow-sm">
+                    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+                        <h1 className="text-2xl font-semibold text-gray-900">
+                            {activeTab === 'dashboard' && 'Dashboard'}
+                            {activeTab === 'apply-leave' && 'Apply for Leave'}
+                            {activeTab === 'leave-history' && 'Leave History'}
+                        </h1>
                     </div>
+                </header>
 
-                    {/* Recent Leaves */}
-                    <div className="lg:col-span-2">
-                      <div className="card">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-lg font-medium text-gray-900">Recent Leave Applications</h3>
-                          <button
-                            onClick={() => window.location.href = '/employee/leave-history'}
-                            className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                          >
-                            View All →
-                          </button>
-                        </div>
-                        
-                        <div className="space-y-4">
-                          {recentLeaves.length === 0 ? (
-                            <div className="text-center py-8">
-                              <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                              <p className="text-gray-600">No recent leave applications</p>
-                            </div>
-                          ) : (
-                            recentLeaves.map((leave) => (
-                              <LeaveCard
-                                key={leave._id}
-                                leave={leave}
-                                onViewDetails={() => window.location.href = '/employee/leave-history'}
-                              />
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Leave Calendar Preview */}
-                  <div className="card mb-8">
-                    <h3 className="text-lg font-medium text-gray-900 mb-4">Upcoming Time Off</h3>
-                    <div className="space-y-3">
-                      {recentLeaves
-                        .filter(leave => leave.status === 'approved' && new Date(leave.startDate) >= new Date())
-                        .slice(0, 3)
-                        .map((leave) => (
-                          <div key={leave._id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg">
-                            <div className="flex items-center">
-                              <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center mr-3">
-                                <Calendar className="h-5 w-5 text-green-600" />
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900 capitalize">{leave.leaveType} Leave</p>
-                                <p className="text-sm text-gray-600">
-                                  {new Date(leave.startDate).toLocaleDateString()} - {new Date(leave.endDate).toLocaleDateString()}
+                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                    {activeTab === 'dashboard' && (
+                        <div className="space-y-6">
+                            {/* Welcome card */}
+                            <div className="bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-lg p-6 text-white">
+                                <h2 className="text-2xl font-bold mb-2">
+                                    Welcome back, {user.name || 'Employee'}!
+                                </h2>
+                                <p className="text-blue-100">
+                                    Manage your leaves and track your applications from one place.
                                 </p>
-                              </div>
                             </div>
-                            <div className="text-right">
-                              <p className="font-medium text-gray-900">{leave.daysCount} days</p>
-                              <span className="badge-success">Approved</span>
+
+                            {/* Leave balance cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">
+                                                Casual Leaves
+                                            </p>
+                                            <p className="text-3xl font-bold text-gray-900 mt-2">
+                                                {leaveBalance?.casualLeaves || 0}
+                                            </p>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-full bg-blue-100 flex items-center justify-center">
+                                            <Calendar className="h-6 w-6 text-blue-600" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">
+                                                Sick Leaves
+                                            </p>
+                                            <p className="text-3xl font-bold text-gray-900 mt-2">
+                                                {leaveBalance?.sickLeaves || 0}
+                                            </p>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center">
+                                            <Calendar className="h-6 w-6 text-green-600" />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="bg-white rounded-lg shadow p-6">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-600">
+                                                Earned Leaves
+                                            </p>
+                                            <p className="text-3xl font-bold text-gray-900 mt-2">
+                                                {leaveBalance?.earnedLeaves || 0}
+                                            </p>
+                                        </div>
+                                        <div className="h-12 w-12 rounded-full bg-purple-100 flex items-center justify-center">
+                                            <Calendar className="h-6 w-6 text-purple-600" />
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                          </div>
-                        ))}
-                      
-                      {recentLeaves.filter(leave => leave.status === 'approved' && new Date(leave.startDate) >= new Date()).length === 0 && (
-                        <div className="text-center py-8">
-                          <AlertCircle className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                          <p className="text-gray-600">No upcoming time off scheduled</p>
+
+                            {/* Recent applications */}
+                            <div className="bg-white rounded-lg shadow">
+                                <div className="px-6 py-4 border-b">
+                                    <h3 className="text-lg font-medium text-gray-900">
+                                        Recent Leave Applications
+                                    </h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gray-50">
+                                            <tr>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Dates
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Type
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Reason
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Status
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                                    Applied On
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-200">
+                                            {leaveApplications.slice(0, 5).map((application) => (
+                                                <tr key={application._id}>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                        {new Date(application.startDate).toLocaleDateString()} -{' '}
+                                                        {new Date(application.endDate).toLocaleDateString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 capitalize">
+                                                        {application.leaveType}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                                                        {application.reason}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(application.status)}`}>
+                                                            {getStatusIcon(application.status)}
+                                                            <span className="ml-1 capitalize">{application.status}</span>
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                        {new Date(application.appliedDate).toLocaleDateString()}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                    {leaveApplications.length === 0 && (
+                                        <div className="text-center py-8 text-gray-500">
+                                            No leave applications yet
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Quick actions */}
+                            <div className="bg-white rounded-lg shadow p-6">
+                                <h3 className="text-lg font-medium text-gray-900 mb-4">
+                                    Quick Actions
+                                </h3>
+                                <div className="flex space-x-4">
+                                    <button
+                                        onClick={() => setActiveTab('apply-leave')}
+                                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700"
+                                    >
+                                        <PlusCircle className="mr-2 h-5 w-5" />
+                                        Apply for Leave
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('leave-history')}
+                                        className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50"
+                                    >
+                                        <FileText className="mr-2 h-5 w-5" />
+                                        View All Applications
+                                    </button>
+                                </div>
+                            </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-                </>
-              } />
-              
-              <Route path="/apply-leave" element={<ApplyLeave />} />
-              <Route path="/leave-history" element={<LeaveHistory />} />
-              <Route path="/leave-balance" element={<LeaveBalance />} />
-              
-              <Route path="*" element={<Navigate to="/employee" replace />} />
-            </Routes>
-          </div>
-        </main>
-      </div>
-    </div>
-  );
+                    )}
+
+                    {activeTab === 'apply-leave' && (
+                        <div className="max-w-2xl mx-auto">
+                            <ApplyLeaveForm onSuccess={fetchDashboardData} />
+                        </div>
+                    )}
+
+                    {activeTab === 'leave-history' && (
+                        <LeaveHistory 
+                            applications={leaveApplications}
+                            onCancel={fetchDashboardData}
+                        />
+                    )}
+                </main>
+            </div>
+        </div>
+    );
 };
 
 export default EmployeeDashboard;

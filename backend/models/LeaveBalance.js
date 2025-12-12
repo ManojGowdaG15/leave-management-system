@@ -1,35 +1,27 @@
 const mongoose = require('mongoose');
 
-const leaveBalanceSchema = new mongoose.Schema({
-    userId: {
+const LeaveBalanceSchema = new mongoose.Schema({
+    user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
-        unique: true,
+        required: true
     },
-    casual: {
+    casualLeaves: {
         type: Number,
-        default: 12,
-        min: [0, 'Leave balance cannot be negative'],
+        default: 12
     },
-    sick: {
+    sickLeaves: {
         type: Number,
-        default: 10,
-        min: [0, 'Leave balance cannot be negative'],
+        default: 10
     },
-    earned: {
+    earnedLeaves: {
         type: Number,
-        default: 15,
-        min: [0, 'Leave balance cannot be negative'],
+        default: 15
     },
-    fiscalYear: {
-        type: Number,
-        default: new Date().getFullYear(),
-    },
-    lastUpdated: {
+    updatedAt: {
         type: Date,
-        default: Date.now,
-    },
+        default: Date.now
+    }
 });
 
-module.exports = mongoose.model('LeaveBalance', leaveBalanceSchema);
+module.exports = mongoose.model('LeaveBalance', LeaveBalanceSchema);

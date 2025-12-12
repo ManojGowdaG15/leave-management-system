@@ -1,67 +1,44 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
-import { AuthProvider } from './contexts/AuthContext';
-import Login from './components/auth/Login';
-import Dashboard from './pages/Dashboard';
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+// Pages
+import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import ManagerDashboard from './pages/ManagerDashboard';
-import PrivateRoute from './components/common/PrivateRoute';
+import PrivateRoute from './components/PrivateRoute';
 
 function App() {
-  return (
-    <AuthProvider>
-      <Router>
-        <div className="min-h-screen bg-gray-50">
-          <Toaster 
-            position="top-right"
-            toastOptions={{
-              duration: 3000,
-              style: {
-                background: '#363636',
-                color: '#fff',
-              },
-              success: {
-                duration: 3000,
-                style: {
-                  background: '#22c55e',
-                },
-              },
-              error: {
-                duration: 4000,
-                style: {
-                  background: '#ef4444',
-                },
-              },
-            }}
-          />
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            
-            <Route path="/" element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/employee" element={
-              <PrivateRoute>
-                <EmployeeDashboard />
-              </PrivateRoute>
-            } />
-            
-            <Route path="/manager" element={
-              <PrivateRoute allowedRoles={['manager', 'admin']}>
-                <ManagerDashboard />
-              </PrivateRoute>
-            } />
-            
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </div>
-      </Router>
-    </AuthProvider>
-  );
+    return (
+        <Router>
+            <div className="min-h-screen bg-gray-50">
+                <Routes>
+                    <Route path="/" element={<LandingPage />} />
+                    <Route path="/login" element={<LoginPage />} />
+                    <Route path="/register" element={<RegisterPage />} />
+                    
+                    {/* Protected Routes */}
+                    <Route path="/employee/*" element={
+                        <PrivateRoute allowedRoles={['employee']}>
+                            <EmployeeDashboard />
+                        </PrivateRoute>
+                    } />
+                    
+                    <Route path="/manager/*" element={
+                        <PrivateRoute allowedRoles={['manager']}>
+                            <ManagerDashboard />
+                        </PrivateRoute>
+                    } />
+                    
+                    <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
+                <ToastContainer position="top-right" />
+            </div>
+        </Router>
+    );
 }
 
 export default App;

@@ -1,17 +1,11 @@
 import axios from 'axios';
 
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000';
-
-// Create axios instance with default config
-const api = axios.create({
-    baseURL: API_URL,
-    headers: {
-        'Content-Type': 'application/json'
-    }
+const API = axios.create({
+    baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
 });
 
 // Request interceptor to add token
-api.interceptors.request.use(
+API.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
         if (token) {
@@ -24,8 +18,8 @@ api.interceptors.request.use(
     }
 );
 
-// Response interceptor to handle errors
-api.interceptors.response.use(
+// Response interceptor for error handling
+API.interceptors.response.use(
     (response) => response,
     (error) => {
         if (error.response?.status === 401) {
@@ -37,16 +31,27 @@ api.interceptors.response.use(
     }
 );
 
+// Auth services
 export const authAPI = {
-    login: (credentials) => api.post('/api/auth/login', credentials),
-    register: (userData) => api.post('/api/auth/register', userData)
+    register: (userData) => API.post('/auth/register', userData),
+    login: (credentials) => API.post('/auth/login', credentials),
 };
 
+// Leave services
 export const leaveAPI = {
-    applyLeave: (leaveData) => api.post('/api/leaves', leaveData),
-    getMyLeaves: () => api.get('/api/leaves'),
-    getAllLeaves: () => api.get('/api/leaves/all'),
-    updateLeaveStatus: (id, status) => api.put(`/api/leaves/${id}`, { status })
+    applyLeave: (data) => API.post('/leave/apply', data),
+    getMyApplications: () => API.get('/leave/my-applications'),
+    getLeaveBalance: () => API.get('/leave/balance'),
+    cancelApplication: (id) => API.put(`/leave/cancel/${id}`),
+    getTeamRequests: () => API.get('/leave/team-requests'),
+    approveLeave: (id, data) => API.put(`/leave/approve/${id}`, data),
+    getTeamCalendar: () => API.get('/leave/team-calendar'),
 };
 
-export default api;
+// Dashboard services
+export const dashboardAPI = {
+    getEmployeeDashboard: () => API.get('/dashboard/employee'),
+    getManagerDashboard: () => API.get('/dashboard/manager'),
+};
+
+export default API;

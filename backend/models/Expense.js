@@ -1,52 +1,50 @@
 const mongoose = require('mongoose');
 
-const expenseSchema = new mongoose.Schema({
-    userId: {
+const ExpenseSchema = new mongoose.Schema({
+    user: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true,
+        required: true
     },
     amount: {
         type: Number,
-        required: [true, 'Please add an amount'],
-        min: [0, 'Amount cannot be negative'],
+        required: true,
+        min: 0
     },
     category: {
         type: String,
         enum: ['Travel', 'Food', 'Accommodation', 'Office Supplies', 'Others'],
-        required: [true, 'Please select a category'],
-    },
-    description: {
-        type: String,
-        required: [true, 'Please add a description'],
-        maxlength: [500, 'Description cannot be more than 500 characters'],
+        required: true
     },
     expenseDate: {
         type: Date,
-        required: [true, 'Please add expense date'],
+        required: true
     },
-    receiptUrl: {
+    description: {
         type: String,
-        default: '',
+        required: true,
+        trim: true
+    },
+    receiptDetails: {
+        type: String,
+        default: ''
     },
     status: {
         type: String,
         enum: ['pending', 'approved', 'rejected'],
-        default: 'pending',
+        default: 'pending'
     },
     managerComments: {
         type: String,
-        default: '',
+        default: ''
     },
     submittedDate: {
         type: Date,
-        default: Date.now,
+        default: Date.now
     },
     approvedDate: {
-        type: Date,
-    },
-}, {
-    timestamps: true,
+        type: Date
+    }
 });
 
-module.exports = mongoose.model('Expense', expenseSchema);
+module.exports = mongoose.model('Expense', ExpenseSchema);

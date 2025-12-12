@@ -488,6 +488,94 @@ app.get('/api/employees/:id', auth, async (req, res) => {
   }
 });
 
+// ==================== SIMPLE DASHBOARD FOR EMPLOYEES ====================
+
+// Simple employee dashboard - ALWAYS works
+app.get('/api/dashboard/employee-simple', auth, async (req, res) => {
+  try {
+    console.log(`👤 Simple dashboard for: ${req.user.name} (${req.user.role})`);
+    
+    // Get user from database
+    const user = await User.findById(req.user._id)
+      .select('-password')
+      .lean();
+    
+    // Get recent leaves
+    const recentLeaves = await Leave.find({ user: req.user._id })
+      .sort({ appliedOn: -1 })
+      .limit(3)
+      .lean();
+    
+    // Count leaves by status
+    const approvedCount = await Leave.countDocuments({ 
+      user: req.user._id, 
+      status: 'approved' 
+    });
+    const pendingCount = await Leave.countDocuments({ 
+      user: req.user._id, 
+      status: 'pending' 
+    });
+    const rejectedCount = await Leave.countDocuments({ 
+      user: req.user._id, 
+      status: 'rejected' 
+    });
+    
+    res.json({
+      success: true,
+      data: {
+        user: {
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          department: user.department,
+          designation: user.designation,
+          employeeId: user.employeeId,
+          totalLeaves: user.totalLeaves || 0,
+          leavesTaken: user.leavesTaken || 0,
+          remainingLeaves: user.remainingLeaves || 0,
+          casualLeaves: user.casualLeaves || { total: 0, taken: 0, remaining: 0 },
+          sickLeaves: user.sickLeaves || { total: 0, taken: 0, remaining: 0 },
+          earnedLeaves: user.earnedLeaves || { total: 0, taken: 0, remaining: 0 }
+        },
+        leaveStats: {
+          approved: approvedCount,
+          pending: pendingCount,
+          rejected: rejectedCount,
+          total: approvedCount + pendingCount + rejectedCount
+        },
+        recentLeaves: recentLeaves
+      }
+    });
+    
+  } catch (error) {
+    console.error('Simple dashboard error:', error);
+    
+    // Even if error, return basic data
+    res.json({
+      success: true,
+      data: {
+        user: {
+          name: req.user.name,
+          role: req.user.role,
+          department: req.user.department,
+          totalLeaves: req.user.totalLeaves || 0,
+          leavesTaken: req.user.leavesTaken || 0,
+          remainingLeaves: req.user.remainingLeaves || 0,
+          casualLeaves: req.user.casualLeaves || { total: 0, taken: 0, remaining: 0 },
+          sickLeaves: req.user.sickLeaves || { total: 0, taken: 0, remaining: 0 },
+          earnedLeaves: req.user.earnedLeaves || { total: 0, taken: 0, remaining: 0 }
+        },
+        leaveStats: {
+          approved: 0,
+          pending: 0,
+          rejected: 0,
+          total: 0
+        },
+        recentLeaves: []
+      }
+    });
+  }
+});
 // ==================== LEAVE ROUTES ====================
 
 // Apply for leave

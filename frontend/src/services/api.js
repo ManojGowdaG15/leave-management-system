@@ -1,15 +1,15 @@
 import axios from 'axios';
-import { toast } from 'react-hot-toast';
 
-// Create axios instance
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: API_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// Request interceptor
+// Add token to requests
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
@@ -18,24 +18,20 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => {
+    return Promise.reject(error);
+  }
 );
 
-// Response interceptor
+// Handle responses
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // Token expired or invalid
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       window.location.href = '/login';
-      toast.error('Session expired. Please login again.');
-    } else if (error.response?.status === 403) {
-      toast.error('You do not have permission to perform this action');
-    } else if (error.response?.data?.message) {
-      toast.error(error.response.data.message);
-    } else {
-      toast.error('Something went wrong. Please try again.');
     }
     return Promise.reject(error);
   }

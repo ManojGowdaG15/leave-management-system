@@ -14,35 +14,32 @@ import {
   Card,
   CardContent,
   Alert,
-  CircularProgress,
-  FormControlLabel,
-  Switch
+  CircularProgress
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../components/contexts/AuthContext';
+import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
 import { toast } from 'react-hot-toast';
 
-const LeaveApplication = () => {
+const ApplyLeaveSimple = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   
   const [loading, setLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [leaveBalances, setLeaveBalances] = useState({
     casual: { total: 12, taken: 0, remaining: 12 },
     sick: { total: 10, taken: 0, remaining: 10 },
     earned: { total: 15, taken: 0, remaining: 15 }
   });
-
+  
   const [formData, setFormData] = useState({
     leaveType: 'Casual',
-    startDate: '',
-    endDate: '',
+    startDate: null,
+    endDate: null,
     reason: '',
-    isHalfDay: false,
-    halfDayType: 'first-half',
-    contactDuringLeave: user?.contactNumber || '',
     numberOfDays: 1
   });
 
@@ -58,37 +55,19 @@ const LeaveApplication = () => {
   }, [user]);
 
   const handleChange = (e) => {
-    const { name, value, checked } = e.target;
-    
-    const updatedFormData = {
+    setFormData({
       ...formData,
-      [name]: name === 'isHalfDay' ? checked : value
-    };
-    
-    setFormData(updatedFormData);
-    
-    // Calculate days if dates are changed
-    if ((name === 'startDate' || name === 'endDate') && updatedFormData.startDate && updatedFormData.endDate) {
-      calculateDays(updatedFormData);
-    }
+      [e.target.name]: e.target.value
+    });
   };
 
-  const calculateDays = (formDataToCalculate = formData) => {
-    if (formDataToCalculate.startDate && formDataToCalculate.endDate) {
-      const start = new Date(formDataToCalculate.startDate);
-      const end = new Date(formDataToCalculate.endDate);
-      
-      if (start > end) {
-        setFormData({ ...formDataToCalculate, numberOfDays: 0 });
-        return;
-      }
-      
+  const calculateDays = () => {
+    if (formData.startDate && formData.endDate) {
+      const start = new Date(formData.startDate);
+      const end = new Date(formData.endDate);
       const diffTime = Math.abs(end - start);
-      let diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-      
-      if (formDataToCalculate.isHalfDay) diffDays = 0.5;
-      
-      setFormData(prev => ({ ...prev, numberOfDays: diffDays }));
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+      setFormData({ ...formData, numberOfDays: diffDays });
     }
   };
 
@@ -109,17 +88,16 @@ const LeaveApplication = () => {
       return;
     }
 
-    setSubmitting(true);
+    setLoading(true);
     
     try {
-      const leaveData = {
-        ...formData,
-        startDate: new Date(formData.startDate).toISOString(),
-        endDate: new Date(formData.endDate).toISOString(),
+      const response = await api.post('/leaves', {
+        leaveType: formData.leaveType,
+        startDate: formData.startDate,
+        endDate: formData.endDate,
+        reason: formData.reason,
         numberOfDays: formData.numberOfDays
-      };
-
-      const response = await api.post('/leaves', leaveData);
+      });
 
       if (response.data.success) {
         toast.success('Leave application submitted successfully!');
@@ -131,7 +109,7 @@ const LeaveApplication = () => {
       console.error('Apply leave error:', error);
       toast.error(error.response?.data?.message || 'Failed to apply leave');
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
   };
 
@@ -146,16 +124,6 @@ const LeaveApplication = () => {
       default:
         return 0;
     }
-  };
-
-  // Get today's date in YYYY-MM-DD format
-  const getTodayDate = () => {
-    return new Date().toISOString().split('T')[0];
-  };
-
-  // Get min end date (should be start date or later)
-  const getMinEndDate = () => {
-    return formData.startDate || getTodayDate();
   };
 
   return (
@@ -245,72 +213,6 @@ const LeaveApplication = () => {
                 </Alert>
               </Grid>
               
-              {/* Half Day Toggle */}
-              <Grid item xs={12} md={6}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.isHalfDay}
-                      onChange={handleChange}
-                      name="isHalfDay"
-                    />
-                  }
-                  label="Half Day Leave"
-                />
-                
-                {formData.isHalfDay && (
-                  <FormControl fullWidth sx={{ mt: 2 }}>
-                    <InputLabel>Half Day Type</InputLabel>
-                    <Select
-                      name="halfDayType"
-                      value={formData.halfDayType}
-                      onChange={handleChange}
-                      label="Half Day Type"
-                    >
-                      <MenuItem value="first-half">First Half</MenuItem>
-                      <MenuItem value="second-half">Second Half</MenuItem>
-                    </Select>
-                  </FormControl>
-                )}
-              </Grid>
-              
-              {/* Dates - Using Native Date Inputs */}
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Start Date *"
-                  type="date"
-                  name="startDate"
-                  value={formData.startDate}
-                  onChange={handleChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  inputProps={{
-                    min: getTodayDate()
-                  }}
-                  required
-                />
-              </Grid>
-              
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="End Date *"
-                  type="date"
-                  name="endDate"
-                  value={formData.endDate}
-                  onChange={handleChange}
-                  InputLabelProps={{
-                    shrink: true,
-                  }}
-                  inputProps={{
-                    min: getMinEndDate()
-                  }}
-                  required
-                />
-              </Grid>
-              
               {/* Number of Days */}
               <Grid item xs={12} md={6}>
                 <TextField
@@ -320,26 +222,40 @@ const LeaveApplication = () => {
                   name="numberOfDays"
                   value={formData.numberOfDays}
                   onChange={handleChange}
-                  disabled={formData.isHalfDay}
-                  inputProps={{ 
-                    min: 0.5, 
-                    step: 0.5,
-                    readOnly: formData.isHalfDay
-                  }}
-                  helperText={formData.isHalfDay ? "Half day selected (0.5 days)" : "Calculated automatically based on dates"}
+                  inputProps={{ min: 0.5, step: 0.5 }}
+                  helperText="Enter 0.5 for half day"
                 />
               </Grid>
               
-              {/* Contact During Leave */}
+              {/* Dates */}
               <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Contact Number During Leave"
-                  name="contactDuringLeave"
-                  value={formData.contactDuringLeave}
-                  onChange={handleChange}
-                  placeholder="Emergency contact number"
-                />
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="Start Date *"
+                    value={formData.startDate}
+                    onChange={(date) => {
+                      setFormData({ ...formData, startDate: date });
+                      if (formData.endDate) calculateDays();
+                    }}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    minDate={new Date()}
+                  />
+                </LocalizationProvider>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <LocalizationProvider dateAdapter={AdapterDateFns}>
+                  <DatePicker
+                    label="End Date *"
+                    value={formData.endDate}
+                    onChange={(date) => {
+                      setFormData({ ...formData, endDate: date });
+                      if (formData.startDate) calculateDays();
+                    }}
+                    renderInput={(params) => <TextField {...params} fullWidth />}
+                    minDate={formData.startDate || new Date()}
+                  />
+                </LocalizationProvider>
               </Grid>
               
               {/* Reason */}
@@ -353,43 +269,26 @@ const LeaveApplication = () => {
                   multiline
                   rows={4}
                   placeholder="Please provide details about your leave request..."
-                  required
                 />
               </Grid>
-              
-              {/* Days Summary */}
-              {formData.startDate && formData.endDate && (
-                <Grid item xs={12}>
-                  <Alert 
-                    severity={formData.numberOfDays <= getAvailableLeaves() ? "success" : "warning"}
-                    sx={{ mt: 2 }}
-                  >
-                    {formData.numberOfDays <= getAvailableLeaves() ? (
-                      <>✓ You have sufficient leave balance for {formData.numberOfDays} days</>
-                    ) : (
-                      <>⚠ You need {formData.numberOfDays - getAvailableLeaves()} more days of {formData.leaveType} leave</>
-                    )}
-                  </Alert>
-                </Grid>
-              )}
               
               {/* Buttons */}
               <Grid item xs={12}>
                 <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
                   <Button
                     variant="outlined"
-                    onClick={() => navigate('/dashboard')}
-                    disabled={submitting}
+                    onClick={() => navigate(-1)}
+                    disabled={loading}
                   >
                     Cancel
                   </Button>
                   <Button
                     type="submit"
                     variant="contained"
-                    disabled={submitting || formData.numberOfDays > getAvailableLeaves()}
-                    startIcon={submitting && <CircularProgress size={20} />}
+                    disabled={loading}
+                    startIcon={loading && <CircularProgress size={20} />}
                   >
-                    {submitting ? 'Submitting...' : 'Apply Leave'}
+                    {loading ? 'Submitting...' : 'Apply Leave'}
                   </Button>
                 </Box>
               </Grid>
@@ -412,7 +311,7 @@ const LeaveApplication = () => {
             • <strong>Earned Leave:</strong> {leaveBalances.earned.total} days per year, accrued based on service period.
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Note: Leave applications require approval. Please apply at least 2 days in advance.
+            Note: Leave applications require manager approval. Please apply at least 2 days in advance.
           </Typography>
         </Paper>
       </Box>
@@ -420,4 +319,4 @@ const LeaveApplication = () => {
   );
 };
 
-export default LeaveApplication;
+export default ApplyLeaveSimple;

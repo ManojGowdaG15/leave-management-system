@@ -23,6 +23,10 @@ import {
   DialogActions,
   Grid,
   Pagination,
+  Card,
+  CardContent,
+  CircularProgress,
+  Alert
 } from '@mui/material';
 import {
   Visibility as VisibilityIcon,
@@ -30,13 +34,18 @@ import {
   FilterList as FilterListIcon,
   Refresh as RefreshIcon,
   Download as DownloadIcon,
+  Event as EventIcon
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { getMyLeaves, cancelLeave, getLeaveById } from '../services/leaveService';
+import { useNavigate } from 'react-router-dom';
 
 const MyLeaves = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  
   const [leaves, setLeaves] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -51,10 +60,25 @@ const MyLeaves = () => {
   const [cancelDialog, setCancelDialog] = useState(false);
   const [viewDialog, setViewDialog] = useState(false);
   const [leaveDetails, setLeaveDetails] = useState(null);
+  
+  const [leaveSummary, setLeaveSummary] = useState({
+    casual: { taken: 0, remaining: 0, total: 0 },
+    sick: { taken: 0, remaining: 0, total: 0 },
+    earned: { taken: 0, remaining: 0, total: 0 }
+  });
 
   useEffect(() => {
     fetchLeaves();
-  }, [filters]);
+    
+    // Set leave summary from user data
+    if (user) {
+      setLeaveSummary({
+        casual: user.casualLeaves || { taken: 0, remaining: 12, total: 12 },
+        sick: user.sickLeaves || { taken: 0, remaining: 10, total: 10 },
+        earned: user.earnedLeaves || { taken: 0, remaining: 15, total: 15 }
+      });
+    }
+  }, [filters, user]);
 
   const fetchLeaves = async () => {
     try {
@@ -179,12 +203,13 @@ const MyLeaves = () => {
 
   return (
     <Container maxWidth="lg">
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4">
-            My Leave Applications
+      <Box sx={{ mt: 4, mb: 4 }}>
+        {/* Header */}
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
+          <Typography variant="h4" component="h1">
+            My Leaves
           </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -194,190 +219,259 @@ const MyLeaves = () => {
               Refresh
             </Button>
             <Button
-              variant="outlined"
-              startIcon={<DownloadIcon />}
-              onClick={exportToCSV}
+              variant="contained"
+              startIcon={<EventIcon />}
+              onClick={() => navigate('/apply-leave')}
             >
-              Export CSV
+              Apply Leave
             </Button>
           </Box>
         </Box>
 
-        {/* Filters */}
-        <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
-          <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <FilterListIcon fontSize="small" /> Filters
-          </Typography>
-          <Grid container spacing={2}>
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Status</InputLabel>
-                <Select
-                  value={filters.status}
-                  onChange={handleFilterChange('status')}
-                  label="Status"
-                >
-                  <MenuItem value="all">All Status</MenuItem>
-                  <MenuItem value="pending">Pending</MenuItem>
-                  <MenuItem value="approved">Approved</MenuItem>
-                  <MenuItem value="rejected">Rejected</MenuItem>
-                  <MenuItem value="cancelled">Cancelled</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Year</InputLabel>
-                <Select
-                  value={filters.year}
-                  onChange={handleFilterChange('year')}
-                  label="Year"
-                >
-                  {getYears().map(year => (
-                    <MenuItem key={year} value={year}>{year}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Month</InputLabel>
-                <Select
-                  value={filters.month}
-                  onChange={handleFilterChange('month')}
-                  label="Month"
-                >
-                  {getMonths().map(month => (
-                    <MenuItem key={month.value} value={month.value}>{month.label}</MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <FormControl fullWidth size="small">
-                <InputLabel>Show per page</InputLabel>
-                <Select
-                  value={filters.limit}
-                  onChange={handleFilterChange('limit')}
-                  label="Show per page"
-                >
-                  <MenuItem value={5}>5</MenuItem>
-                  <MenuItem value={10}>10</MenuItem>
-                  <MenuItem value={20}>20</MenuItem>
-                  <MenuItem value={50}>50</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+        {/* Leave Summary Cards */}
+        <Grid container spacing={3} sx={{ mb: 4 }}>
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography color="primary" gutterBottom variant="h6">
+                  Casual Leave
+                </Typography>
+                <Typography variant="h4" sx={{ mb: 1 }}>
+                  {leaveSummary.casual.remaining} / {leaveSummary.casual.total}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {leaveSummary.casual.taken} days taken
+                </Typography>
+              </CardContent>
+            </Card>
           </Grid>
-        </Paper>
+          
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography color="primary" gutterBottom variant="h6">
+                  Sick Leave
+                </Typography>
+                <Typography variant="h4" sx={{ mb: 1 }}>
+                  {leaveSummary.sick.remaining} / {leaveSummary.sick.total}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {leaveSummary.sick.taken} days taken
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+          
+          <Grid item xs={12} md={4}>
+            <Card>
+              <CardContent sx={{ textAlign: 'center' }}>
+                <Typography color="primary" gutterBottom variant="h6">
+                  Earned Leave
+                </Typography>
+                <Typography variant="h4" sx={{ mb: 1 }}>
+                  {leaveSummary.earned.remaining} / {leaveSummary.earned.total}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {leaveSummary.earned.taken} days taken
+                </Typography>
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
 
-        {/* Leaves Table */}
-        {loading ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-            <Typography>Loading...</Typography>
-          </Box>
-        ) : leaves.length === 0 ? (
-          <Box sx={{ textAlign: 'center', p: 4 }}>
-            <Typography color="text.secondary">
-              No leave applications found
+        {/* Leaves Table Section */}
+        <Paper sx={{ p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h5">
+              Leave Applications
             </Typography>
-            <Button
-              variant="contained"
-              sx={{ mt: 2 }}
-              href="/apply-leave"
-            >
-              Apply for Leave
-            </Button>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                variant="outlined"
+                startIcon={<DownloadIcon />}
+                onClick={exportToCSV}
+              >
+                Export CSV
+              </Button>
+            </Box>
           </Box>
-        ) : (
-          <>
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Leave Type</TableCell>
-                    <TableCell>Dates</TableCell>
-                    <TableCell>Duration</TableCell>
-                    <TableCell>Applied On</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {leaves.map((leave) => (
-                    <TableRow key={leave._id} hover>
-                      <TableCell>
-                        <Typography variant="body2">{leave.leaveType}</Typography>
-                        {leave.isHalfDay && (
-                          <Typography variant="caption" color="text.secondary">
-                            Half Day ({leave.halfDayType})
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
-                      </TableCell>
-                      <TableCell>
-                        {leave.numberOfDays} {leave.numberOfDays === 1 ? 'day' : 'days'}
-                      </TableCell>
-                      <TableCell>
-                        {formatDate(leave.appliedOn)}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={`${getStatusIcon(leave.status)} ${leave.status}`}
-                          color={getStatusColor(leave.status)}
-                          size="small"
-                          sx={{ textTransform: 'capitalize' }}
-                        />
-                        {leave.approvedBy && (
-                          <Typography variant="caption" display="block" color="text.secondary">
-                            By: {leave.approvedBy?.name}
-                          </Typography>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleViewLeave(leave._id)}
-                          title="View Details"
-                        >
-                          <VisibilityIcon fontSize="small" />
-                        </IconButton>
-                        {(leave.status === 'pending' || leave.status === 'approved') && (
+
+          {/* Filters */}
+          <Paper sx={{ p: 2, mb: 3, bgcolor: 'grey.50' }}>
+            <Typography variant="subtitle2" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <FilterListIcon fontSize="small" /> Filters
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Status</InputLabel>
+                  <Select
+                    value={filters.status}
+                    onChange={handleFilterChange('status')}
+                    label="Status"
+                  >
+                    <MenuItem value="all">All Status</MenuItem>
+                    <MenuItem value="pending">Pending</MenuItem>
+                    <MenuItem value="approved">Approved</MenuItem>
+                    <MenuItem value="rejected">Rejected</MenuItem>
+                    <MenuItem value="cancelled">Cancelled</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Year</InputLabel>
+                  <Select
+                    value={filters.year}
+                    onChange={handleFilterChange('year')}
+                    label="Year"
+                  >
+                    {getYears().map(year => (
+                      <MenuItem key={year} value={year}>{year}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Month</InputLabel>
+                  <Select
+                    value={filters.month}
+                    onChange={handleFilterChange('month')}
+                    label="Month"
+                  >
+                    {getMonths().map(month => (
+                      <MenuItem key={month.value} value={month.value}>{month.label}</MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <FormControl fullWidth size="small">
+                  <InputLabel>Show per page</InputLabel>
+                  <Select
+                    value={filters.limit}
+                    onChange={handleFilterChange('limit')}
+                    label="Show per page"
+                  >
+                    <MenuItem value={5}>5</MenuItem>
+                    <MenuItem value={10}>10</MenuItem>
+                    <MenuItem value={20}>20</MenuItem>
+                    <MenuItem value={50}>50</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Leaves Table */}
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : leaves.length === 0 ? (
+            <Box sx={{ textAlign: 'center', p: 4 }}>
+              <Typography color="text.secondary">
+                No leave applications found
+              </Typography>
+              <Button
+                variant="contained"
+                sx={{ mt: 2 }}
+                onClick={() => navigate('/apply-leave')}
+              >
+                Apply for Leave
+              </Button>
+            </Box>
+          ) : (
+            <>
+              <TableContainer>
+                <Table>
+                  <TableHead>
+                    <TableRow>
+                      <TableCell>Leave Type</TableCell>
+                      <TableCell>Dates</TableCell>
+                      <TableCell>Duration</TableCell>
+                      <TableCell>Applied On</TableCell>
+                      <TableCell>Status</TableCell>
+                      <TableCell>Actions</TableCell>
+                    </TableRow>
+                  </TableHead>
+                  <TableBody>
+                    {leaves.map((leave) => (
+                      <TableRow key={leave._id} hover>
+                        <TableCell>
+                          <Typography variant="body2">{leave.leaveType}</Typography>
+                          {leave.isHalfDay && (
+                            <Typography variant="caption" color="text.secondary">
+                              Half Day ({leave.halfDayType})
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(leave.startDate)} - {formatDate(leave.endDate)}
+                        </TableCell>
+                        <TableCell>
+                          {leave.numberOfDays} {leave.numberOfDays === 1 ? 'day' : 'days'}
+                        </TableCell>
+                        <TableCell>
+                          {formatDate(leave.appliedOn)}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={`${getStatusIcon(leave.status)} ${leave.status}`}
+                            color={getStatusColor(leave.status)}
+                            size="small"
+                            sx={{ textTransform: 'capitalize' }}
+                          />
+                          {leave.approvedBy && (
+                            <Typography variant="caption" display="block" color="text.secondary">
+                              By: {leave.approvedBy?.name}
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
                           <IconButton
                             size="small"
-                            color="error"
-                            onClick={() => {
-                              setSelectedLeave(leave._id);
-                              setCancelDialog(true);
-                            }}
-                            title="Cancel Leave"
+                            onClick={() => handleViewLeave(leave._id)}
+                            title="View Details"
                           >
-                            <CancelIcon fontSize="small" />
+                            <VisibilityIcon fontSize="small" />
                           </IconButton>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                          {(leave.status === 'pending' || leave.status === 'approved') && (
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => {
+                                setSelectedLeave(leave._id);
+                                setCancelDialog(true);
+                              }}
+                              title="Cancel Leave"
+                            >
+                              <CancelIcon fontSize="small" />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={totalPages}
-                  page={filters.page}
-                  onChange={handlePageChange}
-                  color="primary"
-                />
-              </Box>
-            )}
-          </>
-        )}
-      </Paper>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                  <Pagination
+                    count={totalPages}
+                    page={filters.page}
+                    onChange={handlePageChange}
+                    color="primary"
+                  />
+                </Box>
+              )}
+            </>
+          )}
+        </Paper>
+      </Box>
 
       {/* View Leave Dialog */}
       <Dialog open={viewDialog} onClose={() => setViewDialog(false)} maxWidth="md" fullWidth>

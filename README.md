@@ -5,6 +5,10 @@ The system supports employees, managers, and admin roles with real-world leave w
 
 ---
 
+Demo Video:
+https://drive.google.com/file/d/1X-dCZUeG7poWUckjBgqFJ9bqsqNCjvdF/view?usp=drive_link
+
+---
 ## Project Overview
 
 The application provides a complete workflow for managing employee leaves within an organization:
